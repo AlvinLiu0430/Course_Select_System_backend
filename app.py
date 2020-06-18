@@ -260,7 +260,7 @@ def get_vehicle2(id):
 
 
 # ######     Rentals
-# ################################################
+
 
 # ###### get all RENTALS for certain vehicle
 @app.route('/vehicles/rentals/<id>', methods=['GET'])
