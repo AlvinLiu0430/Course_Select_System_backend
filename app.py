@@ -103,37 +103,55 @@ class Admin(db.Model):
 		self.major = major
 
 class CultivationPlan(db.Model):
+	id = db.Column(BIGINT(20, unsigned=True), nullable=False), db.ForeignKey('course.id', ondelete='CASCADE'))
 	student_id = db.Column(BIGINT(20), unsigned=True), db.ForeignKey('student.id', ondelete='CASCADE'))
+	teacher_id = db.Column(BIGINT(20), unsigned=True), db.ForeignKey('teacher.id', ondelete='CASCADE'))
 	
 	# Constructor
-	def __init__(self, student_id):
+	def __init__(self, id, student_id, teacher_id):
+        self.id = id
 		self.student_id = student_id
+        self.teacher_id = teacher_id
+
+class Choose(db.Model):
+	id = db.Column(BIGINT(20, unsigned=True), nullable=False), db.ForeignKey('course.id', ondelete='CASCADE'))
+	student_id = db.Column(BIGINT(20), unsigned=True), db.ForeignKey('student.id', ondelete='CASCADE'))
+	teacher_id = db.Column(BIGINT(20), unsigned=True), db.ForeignKey('teacher.id', ondelete='CASCADE'))
+	
+	# Constructor
+	def __init__(self, id, student_id, teacher_id):
+        self.id = id
+		self.student_id = student_id
+        self.teacher_id = teacher_id
 
 class Course(db.Model):
     id = db.Column(BIGINT(20, unsigned=True), nullable=False, primary_key=True)
     serial_no = db.Column(VARCHAR(16), nullable=False)
     course_name = db.Column(VARCHAR(128), nullable=False)
     teacher_id = db.Column(VARCHAR(64), nullable=False)
-    student_id = db.Column(VARCHAR(64), nullable=False)
     used = db.Column(BIGINT(20, unsigned=True), nullable=False, server_default=0)
     capacity = db.Column(BIGINT(20, unsigned=True), nullable=False)
     course_time = db.Column(BIGINT(20, unsigned=True), nullable=False)
     course_length = db.Column(BIGINT(20, unsigned=True), nullable=False, server_default=1)
     course_exam_time = db.Column(VARCHAR(64), nullable=False)
     course_position = db.Column(VARCHAR(64), nullable=False)
+	major = db.Column(VARCHAR(64), nullable=False)
+	credit = db.Column(BIGINT(20, unsigned=True), nullable=False)
+
     
-    def __init__(self, id, serial_no, course_name, teacher_id, student_id, used, capacity, course_time, course_length, course_exam_time, course_position):
+    def __init__(self, id, serial_no, course_name, teacher_id, used, capacity, course_time, course_length, course_exam_time, course_position, major, credit):
         self.id = id
         self.serial_no = serial_no
         self.course_name = course_name
         self.teacher_id = teacher_id
-        self.student_id = student_id
         self.used = used
         self.capacity = capacity
         self.course_time = course_time
         self.course_length = course_length
         self.course_exam_time = course_exam_time
         self.course_position = course_position
+		self.major = major
+		self.credit = credit
 
 # ################################################
 # ######
@@ -150,7 +168,7 @@ class Course(db.Model):
 class CourseSchema(ma.Schema):
     class Meta:
         orderd = True
-        fields = {'id', 'serial_no', 'course_name', 'teacher_id', 'student_id', 'used', 'capacity', 'course_time', 'course_length', 'course_exam_time', 'course_position'}
+        fields = {'id', 'serial_no', 'course_name', 'teacher_id', 'used', 'capacity', 'course_time', 'course_length', 'course_exam_time', 'course_position', 'major', 'credit'}
 
 class StudentSchema(ma.Schema):
     class Meta:
@@ -170,8 +188,12 @@ class AdminSchema(ma.Schema):
 class CultivationPlanSchema(ma.Schema):
     class Meta:
         orderd = True
-        fields = {'student_id'}
+        fields = {'id', 'student_id', 'teacher_id'}
 
+class ChooseSchema(ma.Schema):
+    class Meta:
+        orderd = True
+        fields = {'id', 'student_id', 'teacher_id'}
 
 
 # init schemas
@@ -185,7 +207,7 @@ admin_schema = AdminSchema()
 
 cultivation_schema = CultivationPlanSchema()
 
-
+choose_schema = ChooseSchema()
 
 # ################################################
 # ######
@@ -202,6 +224,15 @@ cultivation_schema = CultivationPlanSchema()
 # ################################################
 
 # ######     get all VEHICLES from vehicles table
+@app.route('/student/login', methods=['GET'])
+def studentLogin(id, password):
+	student = Student.query.filter(Student.id == id).all()
+	result_password = student_schema.jsonify(student)[0].password
+	if (password == result_password):
+		return True
+	else:
+		return False
+
 @app.route('/vehicles/show', methods=['GET'])
 def get_all_vehicles():
 	all_vehicles = Vehicles.query.all()
