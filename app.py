@@ -103,11 +103,26 @@ class Admin(db.Model):
 		self.major = major
 
 class CultivationPlan(db.Model):
+	id = db.Column(BIGINT(20, unsigned=True), nullable=False), db.ForeignKey('course.id', ondelete='CASCADE'))
 	student_id = db.Column(BIGINT(20), unsigned=True), db.ForeignKey('student.id', ondelete='CASCADE'))
+	teacher_id = db.Column(BIGINT(20), unsigned=True), db.ForeignKey('teacher.id', ondelete='CASCADE'))
 	
 	# Constructor
-	def __init__(self, student_id):
+	def __init__(self, id, student_id, teacher_id):
+        self.id = id
 		self.student_id = student_id
+        self.teacher_id = teacher_id
+
+class Choose(db.Model):
+	id = db.Column(BIGINT(20, unsigned=True), nullable=False), db.ForeignKey('course.id', ondelete='CASCADE'))
+	student_id = db.Column(BIGINT(20), unsigned=True), db.ForeignKey('student.id', ondelete='CASCADE'))
+	teacher_id = db.Column(BIGINT(20), unsigned=True), db.ForeignKey('teacher.id', ondelete='CASCADE'))
+	
+	# Constructor
+	def __init__(self, id, student_id, teacher_id):
+        self.id = id
+		self.student_id = student_id
+        self.teacher_id = teacher_id
 
 class Course(db.Model):
     id = db.Column(BIGINT(20, unsigned=True), nullable=False, primary_key=True)
