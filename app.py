@@ -63,6 +63,8 @@ ma = Marshmallow(app)
 # ######     Vehicle Class/Model
 # ################################################
 
+print("sikgbfsibvbiyusw")
+
 class Student(db.Model):
 	id = db.Column(BIGINT(20), unsigned=True), primary_key = True)
 	username = db.Column(VARCHAR(64)), nullable = False)
@@ -124,7 +126,9 @@ class Choose(db.Model):
 		self.student_id = student_id
         self.teacher_id = teacher_id
 
-		# asaasfasf
+		# asaa
+		# 11111
+		# afbeibfwiuebvbuiwreiub
 
 class Course(db.Model):
     id = db.Column(BIGINT(20, unsigned=True), nullable=False, primary_key=True)
