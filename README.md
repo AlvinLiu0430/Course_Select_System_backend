@@ -1,94 +1,84 @@
-# g@round Documentation
-## Table of contents
-- [Description](#Description)
-- [Features](#Features)
-- [Development Stack </>](#Development-Stack)
-- [Design](#Design)
-  - [Classes](#Classes)
-  - [Models](#Models)
-  - [Methods](#Methods)
-- [Installation](#Installation)
-- [Testing](#Testing)
-- [Screenshots](#Screenshots)
-
-## Description
-A BREAD web app tool to manage a vehicle rental business.
-## Features:
-+ Keep data records
-+ Manage vehicle fleet 
-  + Browse, Read, Add, Edit, Delete vehicles. 
-  
-+ View reports / KPI's
-  + Fuel economy
-  + Total revenue
-  + Fuel consumption costs
-  + Rental rate
-  + Maintenance to income ratio
-
-## Development Stack
-
-+ #### Node | React JS
-  + View
-
-+ #### Python | Flask
-  + Model 
-  + Controller
-
-  
-+ #### MySQL Database Server
-  + Data
-
-
-### Testing Framework:
-  + <b>Flask Testing</b>: [Testing Flask Applications — Flask Documentation (1.1.x)](https://flask.palletsprojects.com/en/1.1.x/testing/)
-  + <b>Jest</b>: [Jest](https://jestjs.io/)
-
+# Documentation
+### Author：Xian Liu, Yisu Zhang
 
 ## Design
-#### Classes
+#### Classes Definition
 
 ```mermaid
 classDiagram
-      class Vehicle {
-        +int id
-        +String make
-        +String model
-        +int year
-        +String registration
-        +String fuel
-        +String tank_size
-        +add()
-        +edit()
-        +delete()
-      }
-      
-      class Rental{
-        +int id
-        +int vehicle_id
-        +decimal odometer_start
-        +decimal odometer_end
-        +date date_start
-        +date date_end
-        +char rental_type
-        +add()
-      }
+    class Student(db.Model):
+        id = db.Column(BIGINT(20), unsigned=True), primary_key = True)
+        username = db.Column(VARCHAR(64)), nullable = False)
+        password = db.Column(VARCHAR(64)), nullable = False)
+        major = db.Column(VARCHAR(64)), nullable = False)
 
-      class FuelPurchase{
-        +int id
-        +int rental_id
-        +decimal amount
-        +decimal cost
-        +add()
-      }
-      class Service{
-        +int id
-        +int vehicle_id
-        +decimal odometer
-        +date serviced_at
-        +add()
-      }
+        # Constructor
+        def __init__(self, id, username, password, major):
+            self.id = id
+            self.username = username
+            self.password = password
+            self.major = major
+
+    class Teacher(db.Model):
+        id = db.Column(BIGINT(20), unsigned=True), primary_key = True)
+        username = db.Column(VARCHAR(64)), nullable = False)
+        password = db.Column(VARCHAR(64)), nullable = False)
+        major = db.Column(VARCHAR(64)), nullable = False)
+
+        # Constructor
+        def __init__(self, id, username, password, major):
+            self.id = id
+            self.username = username
+            self.password = password
+            self.major = major
+
+    class Admin(db.Model):
+        id = db.Column(BIGINT(20), unsigned=True), primary_key = True)
+        username = db.Column(VARCHAR(64)), nullable = False)
+        password = db.Column(VARCHAR(64)), nullable = False)
+        major = db.Column(VARCHAR(64)), nullable = False)
+
+        # Constructor
+        def __init__(self, id, username, password, major):
+            self.id = id
+            self.username = username
+            self.password = password
+            self.major = major
+
+    class CultivationPlan(db.Model):
+        student_id = db.Column(BIGINT(20), unsigned=True), db.ForeignKey('student.id', ondelete='CASCADE'))
+
+        # Constructor
+        def __init__(self, student_id):
+            self.student_id = student_id
+    
+    class Course(db.Model):
+    id = db.Column(BIGINT(20, unsigned=True), nullable=False, primary_key=True)
+    serial_no = db.Column(VARCHAR(16), nullable=False)
+    course_name = db.Column(VARCHAR(128), nullable=False)
+    teacher_id = db.Column(VARCHAR(64), nullable=False)
+    student_id = db.Column(VARCHAR(64), nullable=False)
+    used = db.Column(BIGINT(20, unsigned=True), nullable=False, server_default=0)
+    capacity = db.Column(BIGINT(20, unsigned=True), nullable=False)
+    course_time = db.Column(BIGINT(20, unsigned=True), nullable=False)
+    course_length = db.Column(BIGINT(20, unsigned=True), nullable=False, server_default=1)
+    course_exam_time = db.Column(VARCHAR(64), nullable=False)
+    course_position = db.Column(VARCHAR(64), nullable=False)
+    
+    def __init__(self, id, serial_no, course_name, teacher_id, student_id, used, capacity, course_time, course_length, course_exam_time, course_position):
+        self.id = id
+        self.serial_no = serial_no
+        self.course_name = course_name
+        self.teacher_id = teacher_id
+        self.student_id = student_id
+        self.used = used
+        self.capacity = capacity
+        self.course_time = course_time
+        self.course_length = course_length
+        self.course_exam_time = course_exam_time
+        self.course_position = course_position
+
 ```
-![Home](./documentation/screenshots/classes.png)
 
 #### Models
 ```Python
