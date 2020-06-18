@@ -124,6 +124,8 @@ class Choose(db.Model):
 		self.student_id = student_id
         self.teacher_id = teacher_id
 
+		# asaasfasf
+
 class Course(db.Model):
     id = db.Column(BIGINT(20, unsigned=True), nullable=False, primary_key=True)
     serial_no = db.Column(VARCHAR(16), nullable=False)
