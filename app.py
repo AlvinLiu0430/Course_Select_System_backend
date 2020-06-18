@@ -63,6 +63,8 @@ ma = Marshmallow(app)
 # ######     Vehicle Class/Model
 # ################################################
 
+print(10+20)
+
 class Student(db.Model):
 	id = db.Column(BIGINT(20), unsigned=True), primary_key = True)
 	username = db.Column(VARCHAR(64)), nullable = False)
@@ -256,7 +258,7 @@ def get_vehicle2(id):
 
 
 # ######     Rentals
-# ################################################
+
 
 # ###### get all RENTALS for certain vehicle
 @app.route('/vehicles/rentals/<id>', methods=['GET'])
