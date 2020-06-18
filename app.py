@@ -135,92 +135,6 @@ class Course(db.Model):
         self.course_exam_time = course_exam_time
         self.course_position = course_position
 
-class Vehicles(db.Model):
-	id = db.Column(BIGINT(20, unsigned=True), primary_key=True)
-	make = db.Column(VARCHAR(64), nullable=False, server_default='unknown')
-	model = db.Column(VARCHAR(128), nullable=False)
-	release_year = db.Column(INTEGER(display_width=4, unsigned=True, zerofill=True), nullable=False, server_default=text('1'))
-	registration = db.Column(VARCHAR(16), nullable=False)
-	fuel = db.Column(VARCHAR(8), nullable=False, server_default='unknown')
-	tank_size = db.Column(DECIMAL(precision=4, scale=1, unsigned=True))
-	initials =  db.Column(VARCHAR(4), nullable=False, server_default='xxx')
-	created = db.Column(DATETIME, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-	updated = db.Column(DATETIME, server_default=text('NULL ON UPDATE CURRENT_TIMESTAMP'))
-	
-	# Constructor
-	def __init__(self, make, model, release_year, registration, fuel, tank_size, initials):
-		self.make = make
-		self.model = model
-		self.release_year = release_year
-		self.registration = registration
-		self.fuel = fuel
-		self.tank_size = tank_size
-		self.initials = initials
-		#self.created = created
-		#self.updated = updated
-
-# ################################################
-# ######     Rental Class / Model
-# ################################################
-
-class Rentals(db.Model):
-	id = db.Column(BIGINT(20, unsigned=True), primary_key=True)
-	vehicle_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('vehicles.id', ondelete='CASCADE'), nullable=False, server_default=text('0'))
-	odometer_start = db.Column(DECIMAL(precision=9, scale=1, unsigned=True), nullable=False, server_default=text('0'))
-	odometer_end = db.Column(DECIMAL(precision=9, scale=1, unsigned=True), nullable=False, server_default=text('0'))
-	date_start = db.Column(DATETIME, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-	date_end = db.Column(DATETIME, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-	rental_type = db.Column(VARCHAR(1), nullable=False)
-	created = db.Column(DATETIME, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-	updated = db.Column(DATETIME, server_default=text('NULL ON UPDATE CURRENT_TIMESTAMP'))
-	
-	
-	def __init__(self, vehicle_id, odometer_start, odometer_end, date_start, date_end, rental_type ):
-		self.vehicle_id = vehicle_id
-		self.odometer_start = odometer_start
-		self.odometer_end = odometer_end
-		self.date_start = date_start
-		self.date_end = date_end
-		self.rental_type = rental_type
-
-# ################################################
-# ######     Fuel_Purchase Class / Model
-# ################################################
-
-class Fuel_purchases(db.Model):
-	id = db.Column(BIGINT(20, unsigned=True), primary_key=True)
-	vehicle_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('vehicles.id', ondelete='CASCADE'), nullable=False, server_default=text('0'))
-	rental_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('rentals.id', ondelete='CASCADE'), nullable=False, server_default=text('0'))
-	amount = db.Column(DECIMAL(precision=4, scale=1, unsigned=True), nullable=False, server_default=text('0'))
-	cost = db.Column(DECIMAL(precision=4, scale=1, unsigned=True), nullable=False, server_default=text('0'))
-	created = db.Column(DATETIME, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-	updated = db.Column(DATETIME, server_default=text('NULL ON UPDATE CURRENT_TIMESTAMP'))
-	
-	def __init__(self, vehicle_id, rental_id, amount, cost):
-		self.vehicle_id = vehicle_id
-		self.rental_id = rental_id
-		self.amount = amount
-		self.cost = cost
-
-# ################################################
-# ######     Service Class / Model
-# ################################################
-
-class Services(db.Model):
-	id = db.Column(BIGINT(20, unsigned=True), primary_key=True)
-	vehicle_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('vehicles.id', ondelete='CASCADE'), nullable=False, server_default=text('0'))
-	odometer = db.Column(DECIMAL(precision=9, scale=1, unsigned=True), nullable=False, server_default=text('0'))
-	serviced_at = db.Column(DATETIME, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-	created = db.Column(DATETIME, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-	updated = db.Column(DATETIME, server_default=text('NULL ON UPDATE CURRENT_TIMESTAMP'))
-	
-	def __init__(self, vehicle_id, odometer, serviced_at):
-		self.vehicle_id = vehicle_id
-		self.odometer = odometer
-		self.serviced_at = serviced_at
-
-
-
 # ################################################
 # ######
 # ######                SCHEMAS
@@ -233,80 +147,44 @@ class Services(db.Model):
 # ######     Vehicles
 # ################################################
 
-class VehicleSchema(ma.Schema):
-	class Meta:
-		ordered = True
-		fields = ('id', 'make', 'model', 'release_year', 'registration', 'fuel', 'tank_size', 'initials', 'created', 'updated')
+class CourseSchema(ma.Schema):
+    class Meta:
+        orderd = True
+        fields = {'id', 'serial_no', 'course_name', 'teacher_id', 'student_id', 'used', 'capacity', 'course_time', 'course_length', 'course_exam_time', 'course_position'}
 
+class StudentSchema(ma.Schema):
+    class Meta:
+        orderd = True
+        fields = {'id', 'username', 'password', 'major'}
 
+class TeacherSchema(ma.Schema):
+    class Meta:
+        orderd = True
+        fields = {'id', 'username', 'password', 'major'}
 
-# ################################################
-# ######     Rentals
-# ################################################
+class AdminSchema(ma.Schema):
+    class Meta:
+        orderd = True
+        fields = {'id', 'username', 'password', 'major'}
 
-class RentalSchema(ma.Schema):
-	class Meta:
-		ordered = True
-		fields = ('id', 'vehicle_id', 'odometer_start', 'odometer_end', 'date_start', 'date_end', 'rental_type', 'created', 'updated')
+class CultivationPlanSchema(ma.Schema):
+    class Meta:
+        orderd = True
+        fields = {'student_id'}
 
-class RentalSchema_more(ma.Schema):
-	class Meta:
-		ordered = True
-		fields = ('id', 'date_start', 'odometer_start', 'odometer_end', 'distance', 'date_end', 'rental_type', 'rental_cost')
-		
-class RentalSchema_less(ma.Schema):
-	class Meta:
-		ordered = True
-		fields = ('id', 'date_start', 'distance', 'date_end', 'rental_type', 'rental_cost')
-
-
-
-# ################################################
-# ######     Fuel Purchase
-# ################################################
-
-class Fuel_PurchaseSchema(ma.Schema):
-	class Meta:
-		ordered = True
-		fields = ('created', 'amount', 'cost')
-		
-
-# ################################################
-# ######     Services
-# ################################################
-
-class ServicesSchema(ma.Schema):
-	class Meta:
-		ordered = True
-		fields = ('serviced_at', 'odometer')
-
-class ServicesSchema_more(ma.Schema):
-	class Meta:
-		ordered = True
-		fields = ('id', 'vehicle_id', 'serviced_at', 'odometer')
 
 
 # init schemas
-vehicle_schema = VehicleSchema()
-vehicles_schema = VehicleSchema(many=True)
+course_schema = CourseSchema()
 
-rental_schema = RentalSchema()
-rentals_schema = RentalSchema(many=True)
+student_schema = StudentSchema()
 
-rental_schema_more = RentalSchema_more()
-rentals_schema_more = RentalSchema_more(many=True)
+teacher_schema = TeacherSchema()
 
-rental_schema_less = RentalSchema_less()
-rentals_schema_less = RentalSchema_less(many=True)
+admin_schema = AdminSchema()
 
-fuel_purchase_schema = Fuel_PurchaseSchema()
-fuel_purchases_schema = Fuel_PurchaseSchema(many=True)
+cultivation_schema = CultivationPlanSchema()
 
-service_schema = ServicesSchema()
-services_schema = ServicesSchema(many=True)
-
-service_schema_more = ServicesSchema_more()
-services_schema_more = ServicesSchema_more(many=True)
 
 
 # ################################################
