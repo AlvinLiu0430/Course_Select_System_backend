@@ -9,6 +9,10 @@ import datetime
 
 import simplejson
 
+from flask import request,jsonify,current_app
+from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
+import functools
+
 from sqlalchemy import table, column, func, desc
 
 import os
@@ -18,7 +22,47 @@ import os
 # https://auth0.com/blog/sqlalchemy-orm-tutorial-for-python-developers/
 # https://docs.sqlalchemy.org/en/13/core/sqlelement.html#sqlalchemy.sql.expression.func
 
+def create_token(api_user):
+    '''
+    生成token
+    :param api_user:用户id
+    :return: token
+    ''' 
+    s = Serializer(current_app.config["SECRET_KEY"],expires_in=3600)
+    token = s.dumps({"id":api_user}).decode("ascii")
+    return token
 
+def verify_token(token):
+    '''
+    校验token
+    :param token: 
+    :return: 用户信息 or None
+    '''
+    s = Serializer(current_app.config["SECRET_KEY"])
+    try:
+        data = s.loads(token)
+    except Exception:
+        return None
+    student = Student.query.get(data["id"])
+    return student
+
+def login_required(view_func):
+    @functools.wraps(view_func)
+    def verify_token(*args,**kwargs):
+        try:
+            token = request.headers["z-token"]
+        except Exception:
+            return jsonify(code = 4103,msg = '缺少参数token')
+        
+        s = Serializer(current_app.config["SECRET_KEY"])
+        try:
+            s.loads(token)
+        except Exception:
+            return jsonify(code = 500,msg = "登录已过期")
+
+        return view_func(*args,**kwargs)
+
+    return verify_token
 
 # https://stackoverflow.com/questions/32419455/how-to-sum-count-subqueries-with-sqlalchemy --> count sum etc
 
@@ -201,6 +245,10 @@ class ChooseSchema(ma.Schema):
         orderd = True
         fields = {'id', 'student_id', 'teacher_id'}
 
+class ChosenCourseSchema(ma.Schema):
+    class Meta:
+        orderd = True
+        fields = {'id', 'couse_name', 'teacher_id', 'course_position', 'course_time', 'course_exam_time'}
 
 # init schemas
 course_schema = CourseSchema()
@@ -215,6 +263,10 @@ cultivation_schema = CultivationPlanSchema()
 
 choose_schema = ChooseSchema()
 
+
+chosen_course_schema = ChosenCourseSchema()
+chosens_course_schema = ChosenCourseSchema(many=True)
+
 # ################################################
 # ######
 # ######            API END POINTS
@@ -225,327 +277,80 @@ choose_schema = ChooseSchema()
 # ######             GET Methods
 # ###############################################
 
-
-# ######     Vehicles
-# ################################################
-
-# ######     get all VEHICLES from vehicles table
-@app.route('/student/login', methods=['GET'])
-def studentLogin(id, password):
-	student = Student.query.filter(Student.id == id).all()
-	result_password = student_schema.jsonify(student)[0].password
-	if (password == result_password):
-		return True
-	else:
-		return False
-
-@app.route('/vehicles/show', methods=['GET'])
-def get_all_vehicles():
-	all_vehicles = Vehicles.query.all()
-	result = vehicles_schema.dump(all_vehicles)
-	return jsonify(result)
+@app.route('/course/enrolled', methods=['GET'])
+def getSelectedCourse():
+    token = request.headers["z-token"]
+    student = verify_token(token)
+    all_choose = Choose.query.filter(Choose.student_id == student.id).all()
+    all_course = db.session.query(Course.serial_no, Course.course_name, Course.teacher_id, Course.course_position, Course.course_time, Course.course_exam_time).filter(Course.id in all_choose.id).all()
+    result = chosens_course_schema.jsonify(all_course)
+    return result
 
 
-# ###### get a single VEHICLE from vehicles table
-@app.route('/vehicles/show/<id>', methods=['GET'])
-def get_vehicle(id):
-	vehicle = Vehicles.query.filter(Vehicles.id == id).all()
-	return vehicles_schema.jsonify(vehicle) # returns an array of objects
+@app.route('/course/major', methods=['GET'])
+def getMajorCourse():
+    token = request.headers["z-token"]
+    student = verify_token(token)
+    all_course = db.session.query(Course.serial_no, Course.course_name, Course.teacher_id, Course.course_position, Course.course_time, Course.course_exam_time).filter(Course.major == student.major).all()
+    result = chosens_course_schema.jsonify(all_course)
+    return result
 
-# ###### get a single VEHICLE from vehicles table
-@app.route('/details3/vehicles/show/<id>', methods=['GET'])
-def get_vehicle2(id):
-	vehicle = Vehicles.query.filter(Vehicles.id == id).all()
-	return vehicles_schema.jsonify(vehicle) # returns an array of objects
-
-
-# ######     Rentals
-
-
-# ###### get all RENTALS for certain vehicle
-@app.route('/vehicles/rentals/<id>', methods=['GET'])
-def get_rentals_by_vehicle_id(id):
-
-	# list of rentals
-	rentals = db.session.query(Rentals.id, Rentals.date_start, Rentals.odometer_start, Rentals.odometer_end, (Rentals.odometer_end - Rentals.odometer_start).label('distance'), Rentals.date_end, Rentals.rental_type, func.IF(Rentals.rental_type == "D", (func.datediff(Rentals.date_end, Rentals.date_start)+1)*100, (Rentals.odometer_end - Rentals.odometer_start)).label('rental_cost')).filter(Rentals.vehicle_id == id).order_by(desc(Rentals.date_start)).all()
-	#print(rentals)
-	rentals_list = rentals_schema_more.jsonify(rentals)
-	
-	return (rentals_list)
-
-# ###### get RENTALS summary for a vehicle
-@app.route('/vehicles/rentals/sum/<id>', methods=['GET'])
-def get_rentals_sum_by_vehicle_id(id):
-    # rentals summary
-	rentals_summary = db.session.query(Rentals.id, Rentals.vehicle_id, (Rentals.odometer_end - Rentals.odometer_start).label('distance'), Rentals.rental_type, func.IF(Rentals.rental_type == "D", (func.datediff(Rentals.date_end, Rentals.date_start)+1)*100, (Rentals.odometer_end - Rentals.odometer_start)).label('rental_cost')).filter(Rentals.vehicle_id == id).all()
-
-	rentals_count = 0
-	rentals_distance = 0
-	rentals_cost = 0
-
-	for rental in rentals_summary:
-		rentals_count += 1
-		rentals_distance += rental.distance
-		rentals_cost += rental.rental_cost
-	
-	#print(rentals_count)
-	#print(rentals_distance)
-	#print(rentals_cost)
-
-	rentals_summary = {"total_rentals": rentals_count, "total_distance": rentals_distance, "total_cost": rentals_cost}
-	
-	return (rentals_summary)
-
-
-
-# ######     Fuel Purchases
-# ################################################
-
-# ###### get all FUEL_PURCHASES for certain vehicle
-@app.route('/vehicles/fuel_purchases/<id>', methods=['GET'])
-def get_fuel_purchases_by_vehicle_id(id):
-
-	fuel_purchases = Fuel_purchases.query.filter(Fuel_purchases.vehicle_id == id).order_by(desc(Fuel_purchases.created)).all()
-	fuel_purchases_list = fuel_purchases_schema.jsonify(fuel_purchases)
-	return fuel_purchases_list
-	
-
-# ###### get FUEL_PURCHASES summary for a vehicle
-@app.route('/vehicles/fuel_purchases/sum/<id>', methods=['GET'])
-def get_fuel_purchases_sum_by_vehicle_id(id):
-
-	fuel_purchases = Fuel_purchases.query.filter(Fuel_purchases.vehicle_id == id).all()
-	
-	fuel_purchases_count = 0
-	fuel_purchases_amount = 0
-	fuel_purchases_cost = 0
-	
-	for fuel_purchase in fuel_purchases:
-		fuel_purchases_count += 1
-		fuel_purchases_amount += fuel_purchase.amount
-		fuel_purchases_cost += fuel_purchase.cost
-		
-	fuel_purchases_summary = {"total_fuel_purchases": fuel_purchases_count, "total_amount": fuel_purchases_amount, "total_cost": fuel_purchases_cost}
-	
-	return fuel_purchases_summary
-
-
-
-
-# ######     Services
-# ################################################
-
-# ###### get all SERVICES for certain vehicle
-@app.route('/vehicles/services/<id>', methods=['GET'])
-def get_services_by_vehicle_id(id):
-	services = Services.query.filter(Services.vehicle_id == id).order_by(desc(Services.serviced_at)).all()
-	services_list = services_schema.jsonify(services)
-	return (services_list)
-
-# ###### get all SERVICES for certain vehicle
-@app.route('/details3/vehicles/services/<id>', methods=['GET'])
-def get_services_by_vehicle_id2(id):
-	services = Services.query.filter(Services.vehicle_id == id).order_by(desc(Services.serviced_at)).all()
-	services_list = services_schema_more.jsonify(services)
-	return (services_list)
-
-
-# ###### get SERVICES summary for a vehicle
-@app.route('/vehicles/services/sum/<id>', methods=['GET'])
-def get_services_sum_by_vehicle_id(id):
-	services = Services.query.filter(Services.vehicle_id == id).all()
-	
-	services_count = 0
-	
-	for service in services:
-		services_count += 1
-		
-	#print(services_count)
-	
-	services_summary = {"total_services": services_count}
-	
-	return services_summary
+@app.route('/user/courses', methods=['GET'])
+def GetAllCourse():
+    token = request.headers["z-token"]
+    student = verify_token(token)
+    all_course = db.session.query(Course.serial_no, Course.course_name, Course.teacher_id, Course.course_position, Course.course_time, Course.course_exam_time).all()
+    result = chosens_course_schema.jsonify(all_course)
+    return result
 
 
 
 # ################################################
 # ######             POST Methods
 # ###############################################
-	
-	
-# ################################################
-# ## 1 ## add a vehicle to the database
-# ################################################ 	
 
+@app.route('/user/program', methods=['POST'])
+def CultivatePlan():
+    token = request.headers["z-token"]
+    student = verify_token(token)
+    choose_list = request.json['classes']
+    for choose in choose_list:
+        course = Course.query.get(Course.serial_no = choose['code'])
+        choose_id = course.id
+        choose_student = student.id
+        choose_teacher = course.teacher_id
+        new_choose = CultivationPlan(choose_id, choose_student, choose_teacher)
+        db.session.add(new_choose)
+    
+    db.session.commit()
 
-@app.route('/vehicles/add', methods=['POST'])
-def add_vehicle():
+    return 200
 
-# get data from request
-	make = request.json['make']
-	model = request.json['model']
-	release_year = request.json['release_year']
-	registration = request.json['registration']
-	try:
-		fuel = request.json['fuel']
-		if fuel == "":
-			fuel = None
-	except:
-		fuel = None
-	try:
-		tank_size = request.json['tank_size']
-		if tank_size == "":
-			tank_size = None
-	except:
-		tank_size = None
-	try:
-		initials = request.json['initials']
-	except:
-		initials = None
-	
-# instantiate the vehicle object
-	new_vehicle = Vehicles(make, model, release_year, registration, fuel, tank_size, initials)
-	
-# add vehicle to database
-	db.session.add(new_vehicle)
-	db.session.commit()
-	
-# return message
-	return vehicle_schema.jsonify(new_vehicle)
+@app.route('/user/courses/<serial_no>', methods=['POST'])
+def CultivatePlan():
+    token = request.headers["z-token"]
+    student = verify_token(token)
+    course = Course.query.get(serial_no)
+    course_id = course.id
+    course_student = student.id
+    course_teacher = course.teacher_id
+    new_course = Choose(course_id, student_id, course_teacher)
+    db.session.add(new_course)
+    
+    db.session.commit()
 
-	
-	
-
-	
-# ################################################
-# ## 2 ## add a rental to avehicle into the database
-# ################################################ 	
-
-@app.route('/vehicles/rentals/add', methods=['POST'])
-def add_vehicle_rental():
-# get datga from request
-	vehicle_id = request.get_json()['vehicle_id']
-	odometer_start = request.get_json()['odometer_start']
-	odometer_end = request.get_json()['odometer_end']
-	date_start = request.get_json()['date_start']
-	date_end = request.get_json()['date_end']
-	rental_type = request.get_json()['rental_type']
-
-# instantiate the vehicle object
-	
-	
-	# ToDo:
-	# Validate that data is correct;
-	# Return error message
-	
-	new_rental = Rentals(vehicle_id, odometer_start, odometer_end, date_start, date_end, rental_type)
-	
-
-	
-	db.session.add(new_rental)
-	db.session.commit()
-	
-	# ToDo:
-	# Return success message
-	
-	return rental_schema.jsonify(new_rental)
-	
-	
-	
-# ################################################
-# ## 3 ## add a service to a vehicle
-# ################################################ 	
-
-@app.route('/vehicles/services/add', methods=['POST'])
-def add_service():
-# get data from request
-	vehicle_id = request.get_json()['vehicle_id']
-	odometer = request.get_json()['odometer']
-	serviced_at = request.get_json()['serviced_at']
-
-	
-# instantiate the vehicle object
-	new_service = Services(vehicle_id, odometer, serviced_at)
-	
-	db.session.add(new_service)
-	db.session.commit()
-	
-	return service_schema.jsonify(new_service)
-	
-	
-# ################################################
-# ## 4 ## add a fuel purchase to a vehicle
-# ################################################ 
-	
-@app.route('/vehicles/fuel_purchase/add', methods=['POST'])
-def add_fuel_purchase():
-# get data from request
-
-	vehicle_id = request.get_json()['vehicle_id']
-	rental_id = request.get_json()['rental_id']
-	amount = request.get_json()['amount']
-	cost = request.get_json()['cost']
-	
-# instantiate the vehicle object
-	new_fuel_purchase = Fuel_purchases(vehicle_id, rental_id, amount, cost)
-	
-	db.session.add(new_fuel_purchase)
-	db.session.commit()
-	
-	return fuel_purchase_schema.jsonify(new_fuel_purchase)
-	
+    return 200
 	
 # ################################################
 # ######             PUT Methods
 # ###############################################
 	
-	
-# ################################################
-# ######   Edit vehicle
-# ################################################ 	
 
-@app.route('/vehicles/edit/<id>', methods=['PUT'])
-def edit_vehicle(id):
-	vehicle = Vehicles.query.get(id)
 
-	make = request.get_json()['make']
-	model = request.get_json()['model']
-	release_year = request.get_json()['release_year']
-	registration = request.get_json()['registration']
-	fuel = request.get_json()['fuel']
-	tank_size = request.get_json()['tank_size']
-	initials = request.get_json()['initials']
-	
-	vehicle.make = make
-	vehicle.model = model
-	vehicle.release_year = release_year
-	vehicle.registration = registration
-	vehicle.fuel = fuel
-	vehicle.tank_size = tank_size
-	vehicle.initials = initials
-	
-	db.session.commit()
-	return vehicle_schema.jsonify(vehicle)
-	
-	
-	
 # ################################################
 # ######             DELETE Methods
 # ###############################################
 	
-	
-# ################################################
-# ######   Delete vehicle
-# ################################################ 
-	
-@app.route('/vehicles/delete/<id>', methods=['DELETE'])
-def delete_vehicle(id):
-	vehicle = Vehicles.query.get(id)
-	db.session.delete(vehicle)
-	db.session.commit()
-	
-	return vehicle_schema.jsonify(vehicle)
-
 
 # Run server
 if __name__ == '__main__':
