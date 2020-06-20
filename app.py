@@ -320,7 +320,7 @@ def CultivatePlan():
         choose_student = student.id
         choose_teacher = course.teacher_id
         new_choose = CultivationPlan(choose_id, choose_student, choose_teacher)
-        db.session.add(new_choose)
+        db.session.merge(new_choose)
     
     db.session.commit()
 
