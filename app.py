@@ -149,7 +149,7 @@ class Admin(db.Model):
 		self.major = major
 
 class CultivationPlan(db.Model):
-	id = db.Column(BIGINT(20, unsigned=True), nullable=False), db.ForeignKey('course.id', ondelete='CASCADE'))
+	id = db.Column(BIGINT(20, unsigned=True), nullable=False), db.ForeignKey('course.id', ondelete='CASCADE'), primary_key=True)
 	student_id = db.Column(BIGINT(20), unsigned=True), db.ForeignKey('student.id', ondelete='CASCADE'))
 	teacher_id = db.Column(BIGINT(20), unsigned=True), db.ForeignKey('teacher.id', ondelete='CASCADE'))
 	
@@ -160,7 +160,7 @@ class CultivationPlan(db.Model):
         self.teacher_id = teacher_id
 
 class Choose(db.Model):
-	id = db.Column(BIGINT(20, unsigned=True), nullable=False), db.ForeignKey('course.id', ondelete='CASCADE'))
+	id = db.Column(BIGINT(20, unsigned=True), nullable=False), db.ForeignKey('course.id', ondelete='CASCADE'), primary_key=True)
 	student_id = db.Column(BIGINT(20), unsigned=True), db.ForeignKey('student.id', ondelete='CASCADE'))
 	teacher_id = db.Column(BIGINT(20), unsigned=True), db.ForeignKey('teacher.id', ondelete='CASCADE'))
 	
@@ -315,7 +315,7 @@ def CultivatePlan():
     student = verify_token(token)
     choose_list = request.json['classes']
     for choose in choose_list:
-        course = Course.query.get(Course.serial_no = choose['code'])
+        course = Course.query.get(Course.serial_no = choose)
         choose_id = course.id
         choose_student = student.id
         choose_teacher = course.teacher_id
