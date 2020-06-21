@@ -107,8 +107,6 @@ ma = Marshmallow(app)
 # ######     Vehicle Class/Model
 # ################################################
 
-print("sikgbfsibvbiyusw")
-
 class Student(db.Model):
 	id = db.Column(BIGINT(20), unsigned=True), primary_key = True)
 	username = db.Column(VARCHAR(64)), nullable = False)
@@ -248,7 +246,27 @@ class ChooseSchema(ma.Schema):
 class ChosenCourseSchema(ma.Schema):
     class Meta:
         orderd = True
-        fields = {'id', 'couse_name', 'teacher_id', 'course_position', 'course_time', 'course_exam_time'}
+        fields = {'id', 'couse_name', 'teacher', 'course_position', 'course_time', 'course_exam_time'}
+
+class LoginSuccessSchema(ma.Schema):
+    class Meta:
+        orderd = True
+        fields = {'success', 'message', 'token', 'role'}
+
+class LoginFailSchema(ma.Schema):
+    class Meta:
+        orderd = True
+        fields = {'success', 'message'}
+
+class LogoutSchema(ma.Schema):
+    class Meta:
+        orderd = True
+        fields = {'success', 'message'}
+
+class UserInfoSchema(ma.Schema):
+    class Meta:
+        orderd = True
+        fields = {'username', 'major'}
 
 # init schemas
 course_schema = CourseSchema()
@@ -267,6 +285,14 @@ choose_schema = ChooseSchema()
 chosen_course_schema = ChosenCourseSchema()
 chosens_course_schema = ChosenCourseSchema(many=True)
 
+login_success_schema = LoginSuccessSchema()
+
+login_fail_schema = LoginFailSchema()
+
+logout_schema = LogoutSchema()
+
+user_info_schema = UserInfoSchema()
+
 # ################################################
 # ######
 # ######            API END POINTS
@@ -277,12 +303,20 @@ chosens_course_schema = ChosenCourseSchema(many=True)
 # ######             GET Methods
 # ###############################################
 
+@app.route('/user/current', methods=['GET'])
+def getUserInfo():
+    token = request.headers["z-token"]
+    student = verify_token(token)
+    student_info = Student.query.filter(Student.id == student.id)
+    result = user_info_schema.jsonify((student_info.username, student_info.major))
+    return result
+
 @app.route('/course/enrolled', methods=['GET'])
 def getSelectedCourse():
     token = request.headers["z-token"]
     student = verify_token(token)
     all_choose = Choose.query.filter(Choose.student_id == student.id).all()
-    all_course = db.session.query(Course.serial_no, Course.course_name, Course.teacher_id, Course.course_position, Course.course_time, Course.course_exam_time).filter(Course.id in all_choose.id).all()
+    all_course = db.session.query(Course.serial_no, Course.course_name, Teacher.username, Course.course_position, Course.course_time, Course.course_exam_time).filter(Course.id in all_choose.id).filter(Teacher.id == all_choose.teacher_id).all()
     result = chosens_course_schema.jsonify(all_course)
     return result
 
@@ -291,7 +325,7 @@ def getSelectedCourse():
 def getMajorCourse():
     token = request.headers["z-token"]
     student = verify_token(token)
-    all_course = db.session.query(Course.serial_no, Course.course_name, Course.teacher_id, Course.course_position, Course.course_time, Course.course_exam_time).filter(Course.major == student.major).all()
+    all_course = db.session.query(Course.serial_no, Course.course_name, Teacher.username, Course.course_position, Course.course_time, Course.course_exam_time).filter(Course.major == student.major).filter(Teacher.id == Course.teacher_id).all()
     result = chosens_course_schema.jsonify(all_course)
     return result
 
@@ -299,7 +333,8 @@ def getMajorCourse():
 def GetAllCourse():
     token = request.headers["z-token"]
     student = verify_token(token)
-    all_course = db.session.query(Course.serial_no, Course.course_name, Course.teacher_id, Course.course_position, Course.course_time, Course.course_exam_time).all()
+	all_choose = Choose.query.filter(Choose.student_id == student.id).all()
+    all_course = db.session.query(Course.serial_no, Course.course_name, Teacher.username, Course.course_position, Course.course_time, Course.course_exam_time, 1 if Course.id in all_choose.id else 0).filter(Teacher.id == Course.teacher_id).all()
     result = chosens_course_schema.jsonify(all_course)
     return result
 
@@ -308,6 +343,46 @@ def GetAllCourse():
 # ################################################
 # ######             POST Methods
 # ###############################################
+
+@app.route('/login', methods=['POST'])
+def userLogin(id, password):
+	student_id_list = Student.query.all().id
+	teacher_id_list = Teacher.query.all().id
+	admin_id_list = Admin.query.all().id
+	if (id in student_id_list):
+		role = 0
+	elif (id in teacher_id_list):
+		role = 1
+	elif (id in admin_id_list):
+		role = 2
+	else:
+		role = -1
+		result = login_fail_schema.jsonify((False, "Invalid username or password"))
+	if (role == 0):
+	    correct_password = Student.query.filter(Student.id == id)
+		if (correct_password == password):
+			result = login_success_schema.jsonify((True, "Login Success", create_token(id), 0))
+		else:
+			result = login_fail_schema.jsonify((False, "Invalid username or password"))
+	if (role == 1):
+	    correct_password = Teacher.query.filter(Teacher.id == id)
+		if (correct_password == password):
+			result = login_success_schema.jsonify((True, "Login Success", create_token(id), 1))
+		else:
+			result = login_fail_schema.jsonify((False, "Invalid username or password"))
+	if (role == 2):
+	    correct_password = Admin.query.filter(Admin.id == id)
+		if (correct_password == password):
+			result = login_success_schema.jsonify((True, "Login Success", create_token(id), 2))
+		else:
+			result = login_fail_schema.jsonify((False, "Invalid username or password"))
+    return result
+
+@app.route('/logout', methods=['POST'])
+def userLogout():
+	result = logout_schema.jsonify((True, "Logout Success"))
+	return result
+
 
 @app.route('/user/program', methods=['POST'])
 def CultivatePlan():
