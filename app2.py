@@ -6,8 +6,13 @@ from sqlalchemy.dialects.mysql import INTEGER, BIGINT, CHAR, DECIMAL, DATE, DATE
 from sqlalchemy.sql import text
 from flask_marshmallow import Marshmallow
 import datetime
-
+import base64
 import simplejson
+from hashlib import sha256
+import copy
+from flask import request,jsonify,current_app
+from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
+import functools
 
 from sqlalchemy import table, column, func, desc
 
@@ -18,7 +23,59 @@ import os
 # https://auth0.com/blog/sqlalchemy-orm-tutorial-for-python-developers/
 # https://docs.sqlalchemy.org/en/13/core/sqlelement.html#sqlalchemy.sql.expression.func
 
+# def create_token(api_user, api_role):
+# 	'''
+# 	生成token
+# 	:param api_user:用户id
+# 	:return: token
+# 	''' 
+# 	s = Serializer(current_app.config["SECRET_KEY"],expires_in=3600)
+# 	tmp_dict = {"id":api_user, "role":api_role}
+# 	tmp_byte = bytes('{}'.format(tmp_dict),'utf-8')
+# 	token = s.dumps(copy.deepcopy(tmp_byte)).decode()
+# 	return token
 
+# def verify_token(token):
+# 	'''
+# 	校验token
+# 	:param token: 
+# 	:return: 用户信息 or None
+# 	'''
+# 	s = Serializer(current_app.config["SECRET_KEY"])
+# 	try:
+# 		data = s.loads(token)
+# 	except Exception:
+# 		return None
+# 	if (data["role"] == 0):
+# 		result = Student.query.get(data["id"])
+# 	elif (data["role"] == 1):
+# 		result = Teacher.query.get(data["id"])
+# 	elif (data["role"] == 2):
+# 		result = Admin.query.get(data["id"])
+# 	return result
+
+# def login_required(view_func):
+# 	@functools.wraps(view_func)
+# 	def verify_token(*args,**kwargs):
+# 		try:
+# 			token = request.headers["z-token"]
+# 		except Exception:
+# 			return jsonify(code = 4103,msg = '缺少参数token')
+		
+# 		s = Serializer(current_app.config["SECRET_KEY"])
+# 		try:
+# 			s.loads(token)
+# 		except Exception:
+# 			return jsonify(code = 500,msg = "登录已过期")
+
+# 		return view_func(*args,**kwargs)
+
+# 	return verify_token
+
+
+username_to_token = {}
+
+token_to_username = {}
 
 # https://stackoverflow.com/questions/32419455/how-to-sum-count-subqueries-with-sqlalchemy --> count sum etc
 
@@ -28,7 +85,6 @@ import os
 app = Flask(__name__)
 
 # API Endpoints
-
 
 # Database
 app.config['MYSQL_USER'] = 'nmt_fleet_manager'
@@ -63,91 +119,103 @@ ma = Marshmallow(app)
 # ######     Vehicle Class/Model
 # ################################################
 
-class Vehicles(db.Model):
-	id = db.Column(BIGINT(20, unsigned=True), primary_key=True)
-	make = db.Column(VARCHAR(64), nullable=False, server_default='unknown')
-	model = db.Column(VARCHAR(128), nullable=False)
-	release_year = db.Column(INTEGER(display_width=4, unsigned=True, zerofill=True), nullable=False, server_default=text('1'))
-	registration = db.Column(VARCHAR(16), nullable=False)
-	fuel = db.Column(VARCHAR(8), nullable=False, server_default='unknown')
-	tank_size = db.Column(DECIMAL(precision=4, scale=1, unsigned=True))
-	initials =  db.Column(VARCHAR(4), nullable=False, server_default='xxx')
-	created = db.Column(DATETIME, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-	updated = db.Column(DATETIME, server_default=text('NULL ON UPDATE CURRENT_TIMESTAMP'))
-	
+class Student(db.Model):
+	id = db.Column(BIGINT(20, unsigned=True), primary_key = True)
+	username = db.Column(VARCHAR(64), nullable = False)
+	password = db.Column(VARCHAR(64), nullable = False)
+	major = db.Column(VARCHAR(64), nullable = False)
+	sex = db.Column(BIGINT(20, unsigned=True), nullable = False)
+	phone = db.Column(VARCHAR(64), nullable = False)
+
 	# Constructor
-	def __init__(self, make, model, release_year, registration, fuel, tank_size, initials):
-		self.make = make
-		self.model = model
-		self.release_year = release_year
-		self.registration = registration
-		self.fuel = fuel
-		self.tank_size = tank_size
-		self.initials = initials
-		#self.created = created
-		#self.updated = updated
+	def __init__(self, id, username, password, major, sex, phone):
+		self.id = id
+		self.username = username
+		self.password = password
+		self.major = major
+		self.sex = sex
+		self.phone = phone
 
-# ################################################
-# ######     Rental Class / Model
-# ################################################
+class Teacher(db.Model):
+	id = db.Column(BIGINT(20, unsigned=True), primary_key = True)
+	username = db.Column(VARCHAR(64), nullable = False)
+	password = db.Column(VARCHAR(64), nullable = False)
+	major = db.Column(VARCHAR(64), nullable = False)
 
-class Rentals(db.Model):
-	id = db.Column(BIGINT(20, unsigned=True), primary_key=True)
-	vehicle_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('vehicles.id', ondelete='CASCADE'), nullable=False, server_default=text('0'))
-	odometer_start = db.Column(DECIMAL(precision=9, scale=1, unsigned=True), nullable=False, server_default=text('0'))
-	odometer_end = db.Column(DECIMAL(precision=9, scale=1, unsigned=True), nullable=False, server_default=text('0'))
-	date_start = db.Column(DATETIME, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-	date_end = db.Column(DATETIME, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-	rental_type = db.Column(VARCHAR(1), nullable=False)
-	created = db.Column(DATETIME, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-	updated = db.Column(DATETIME, server_default=text('NULL ON UPDATE CURRENT_TIMESTAMP'))
-	
-	
-	def __init__(self, vehicle_id, odometer_start, odometer_end, date_start, date_end, rental_type ):
-		self.vehicle_id = vehicle_id
-		self.odometer_start = odometer_start
-		self.odometer_end = odometer_end
-		self.date_start = date_start
-		self.date_end = date_end
-		self.rental_type = rental_type
+	# Constructor
+	def __init__(self, id, username, password, major):
+		self.id = id
+		self.username = username
+		self.password = password
+		self.major = major
 
-# ################################################
-# ######     Fuel_Purchase Class / Model
-# ################################################
+class Admin(db.Model):
+	id = db.Column(BIGINT(20, unsigned=True), primary_key = True)
+	username = db.Column(VARCHAR(64), nullable = False)
+	password = db.Column(VARCHAR(64), nullable = False)
+	major = db.Column(VARCHAR(64), nullable = False)
 
-class Fuel_purchases(db.Model):
-	id = db.Column(BIGINT(20, unsigned=True), primary_key=True)
-	vehicle_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('vehicles.id', ondelete='CASCADE'), nullable=False, server_default=text('0'))
-	rental_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('rentals.id', ondelete='CASCADE'), nullable=False, server_default=text('0'))
-	amount = db.Column(DECIMAL(precision=4, scale=1, unsigned=True), nullable=False, server_default=text('0'))
-	cost = db.Column(DECIMAL(precision=4, scale=1, unsigned=True), nullable=False, server_default=text('0'))
-	created = db.Column(DATETIME, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-	updated = db.Column(DATETIME, server_default=text('NULL ON UPDATE CURRENT_TIMESTAMP'))
-	
-	def __init__(self, vehicle_id, rental_id, amount, cost):
-		self.vehicle_id = vehicle_id
-		self.rental_id = rental_id
-		self.amount = amount
-		self.cost = cost
+	# Constructor
+	def __init__(self, id, username, password, major):
+		self.id = id
+		self.username = username
+		self.password = password
+		self.major = major
 
-# ################################################
-# ######     Service Class / Model
-# ################################################
+class CultivationPlan(db.Model):
+	id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('course.id', ondelete='CASCADE'), nullable=False,  primary_key=True)
+	student_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('student.id', ondelete='CASCADE'))
+	teacher_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('teacher.id', ondelete='CASCADE'))
 
-class Services(db.Model):
-	id = db.Column(BIGINT(20, unsigned=True), primary_key=True)
-	vehicle_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('vehicles.id', ondelete='CASCADE'), nullable=False, server_default=text('0'))
-	odometer = db.Column(DECIMAL(precision=9, scale=1, unsigned=True), nullable=False, server_default=text('0'))
-	serviced_at = db.Column(DATETIME, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-	created = db.Column(DATETIME, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
-	updated = db.Column(DATETIME, server_default=text('NULL ON UPDATE CURRENT_TIMESTAMP'))
-	
-	def __init__(self, vehicle_id, odometer, serviced_at):
-		self.vehicle_id = vehicle_id
-		self.odometer = odometer
-		self.serviced_at = serviced_at
+	# Constructor
+	def __init__(self, id, student_id, teacher_id):
+		self.id = id
+		self.student_id = student_id
+		self.teacher_id = teacher_id
+
+class Choose(db.Model):
+	id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('course.id', ondelete='CASCADE'), nullable=False,  primary_key=True)
+	student_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('student.id', ondelete='CASCADE'))
+	teacher_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('teacher.id', ondelete='CASCADE'))
+
+	# Constructor
+	def __init__(self, id, student_id, teacher_id):
+		self.id = id
+		self.student_id = student_id
+		self.teacher_id = teacher_id
+
+		# asaa
+		# 11111
+		# afbeibfwiuebvbuiwreiub
+
+class Course(db.Model):
+	id = db.Column(BIGINT(20, unsigned=True), nullable=False, primary_key=True)
+	serial_no = db.Column(VARCHAR(16), nullable=False)
+	course_name = db.Column(VARCHAR(128), nullable=False)
+	teacher_id = db.Column(VARCHAR(64), nullable=False)
+	used = db.Column(BIGINT(20, unsigned=True), nullable=False)
+	capacity = db.Column(BIGINT(20, unsigned=True), nullable=False)
+	course_time = db.Column(VARCHAR(64), nullable=False)
+	course_length = db.Column(BIGINT(20, unsigned=True), nullable=False)
+	course_exam_time = db.Column(VARCHAR(64), nullable=False)
+	course_position = db.Column(VARCHAR(64), nullable=False)
+	major = db.Column(VARCHAR(64), nullable=False)
+	credit = db.Column(BIGINT(20, unsigned=True), nullable=False)
 
 
+	def __init__(self, id, serial_no, course_name, teacher_id, used, capacity, course_time, course_length, course_exam_time, course_position, major, credit):
+		self.id = id
+		self.serial_no = serial_no
+		self.course_name = course_name
+		self.teacher_id = teacher_id
+		self.used = used
+		self.capacity = capacity
+		self.course_time = course_time
+		self.course_length = course_length
+		self.course_exam_time = course_exam_time
+		self.course_position = course_position
+		self.major = major
+		self.credit = credit
 
 # ################################################
 # ######
@@ -161,81 +229,116 @@ class Services(db.Model):
 # ######     Vehicles
 # ################################################
 
-class VehicleSchema(ma.Schema):
+class CourseSchema(ma.Schema):
 	class Meta:
-		ordered = True
-		fields = ('id', 'make', 'model', 'release_year', 'registration', 'fuel', 'tank_size', 'initials', 'created', 'updated')
+		orderd = True
+		fields = ('id', 'serial_no', 'course_name', 'teacher_id', 'used', 'capacity', 'course_time', 'course_length', 'course_exam_time', 'course_position', 'major', 'credit')
 
-
-
-# ################################################
-# ######     Rentals
-# ################################################
-
-class RentalSchema(ma.Schema):
+class StudentSchema(ma.Schema):
 	class Meta:
-		ordered = True
-		fields = ('id', 'vehicle_id', 'odometer_start', 'odometer_end', 'date_start', 'date_end', 'rental_type', 'created', 'updated')
+		orderd = True
+		fields = ('id', 'username', 'password', 'major', 'sex', 'phone')
 
-class RentalSchema_more(ma.Schema):
+class TeacherSchema(ma.Schema):
 	class Meta:
-		ordered = True
-		fields = ('id', 'date_start', 'odometer_start', 'odometer_end', 'distance', 'date_end', 'rental_type', 'rental_cost')
-		
-class RentalSchema_less(ma.Schema):
+		orderd = True
+		fields = ('id', 'username', 'password', 'major')
+
+class AdminSchema(ma.Schema):
 	class Meta:
-		ordered = True
-		fields = ('id', 'date_start', 'distance', 'date_end', 'rental_type', 'rental_cost')
+		orderd = True
+		fields = ('id', 'username', 'password', 'major')
 
-
-
-# ################################################
-# ######     Fuel Purchase
-# ################################################
-
-class Fuel_PurchaseSchema(ma.Schema):
+class CultivationPlanSchema(ma.Schema):
 	class Meta:
-		ordered = True
-		fields = ('created', 'amount', 'cost')
-		
+		orderd = True
+		fields = ('id', 'student_id', 'teacher_id')
 
-# ################################################
-# ######     Services
-# ################################################
-
-class ServicesSchema(ma.Schema):
+class ChooseSchema(ma.Schema):
 	class Meta:
-		ordered = True
-		fields = ('serviced_at', 'odometer')
+		orderd = True
+		fields = ('id', 'student_id', 'teacher_id')
 
-class ServicesSchema_more(ma.Schema):
+class ChosenCourseSchema(ma.Schema):
 	class Meta:
-		ordered = True
-		fields = ('id', 'vehicle_id', 'serviced_at', 'odometer')
+		orderd = True
+		fields = ('code', 'name', 'teacher', 'position', 'class_time', 'exam_time')
+    
+class ChosenStateSchema(ma.Schema):
+	class Meta:
+		orderd = True
+		fields = ('code', 'name', 'teacher', 'position', 'class_time', 'exam_time', 'chosen')
 
+class LoginSuccessSchema(ma.Schema):
+	class Meta:
+		orderd = True
+		fields = ('success', 'message', 'token', 'role')
+
+class LoginFailSchema(ma.Schema):
+	class Meta:
+		orderd = True
+		fields = ('success', 'message')
+
+class LogoutSchema(ma.Schema):
+	class Meta:
+		orderd = True
+		fields = ('success', 'message')
+
+class UserInfoSchema(ma.Schema):
+	class Meta:
+		orderd = True
+		fields = ('username', 'major')
+
+class UpdateCultivationPlanSchema(ma.Schema):
+	class Meta:
+		orderd = True
+		fields = ('success', 'message')
+
+class StudentChosenSchema(ma.Schema):
+	class Meta:
+		orderd = True
+		fields = ('id', 'code', 'name', 'position', 'class_time', 'exam_time', 'cap', 'used')
+
+class StudentTeacherSchema(ma.Schema):
+	class Meta:
+		orderd = True
+		fields = ('id', 'name', 'sex', 'major', 'phone')
 
 # init schemas
-vehicle_schema = VehicleSchema()
-vehicles_schema = VehicleSchema(many=True)
+course_schema = CourseSchema()
 
-rental_schema = RentalSchema()
-rentals_schema = RentalSchema(many=True)
+student_schema = StudentSchema()
 
-rental_schema_more = RentalSchema_more()
-rentals_schema_more = RentalSchema_more(many=True)
+teacher_schema = TeacherSchema()
 
-rental_schema_less = RentalSchema_less()
-rentals_schema_less = RentalSchema_less(many=True)
+admin_schema = AdminSchema()
 
-fuel_purchase_schema = Fuel_PurchaseSchema()
-fuel_purchases_schema = Fuel_PurchaseSchema(many=True)
+cultivation_schema = CultivationPlanSchema()
 
-service_schema = ServicesSchema()
-services_schema = ServicesSchema(many=True)
+choose_schema = ChooseSchema()
 
-service_schema_more = ServicesSchema_more()
-services_schema_more = ServicesSchema_more(many=True)
 
+chosen_course_schema = ChosenCourseSchema()
+chosens_course_schema = ChosenCourseSchema(many=True)
+
+chosen_state_schema = ChosenStateSchema()
+chosens_state_schema = ChosenStateSchema(many=True)
+
+student_chosen_schema = StudentChosenSchema()
+students_chosen_schema = StudentChosenSchema(many=True)
+
+login_success_schema = LoginSuccessSchema()
+
+login_fail_schema = LoginFailSchema()
+
+logout_schema = LogoutSchema()
+
+user_info_schema = UserInfoSchema()
+
+update_cultivation_plan_schema = UpdateCultivationPlanSchema()
+
+student_teacher_schema = StudentTeacherSchema()
+students_teacher_schema = StudentTeacherSchema(many=True)
 
 # ################################################
 # ######
@@ -248,319 +351,294 @@ services_schema_more = ServicesSchema_more(many=True)
 # ###############################################
 
 
-# ######     Vehicles
-# ################################################
+@app.after_request
+def change_request_header(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Token, Magic"
+    return response
 
-# ######     get all VEHICLES from vehicles table
-@app.route('/vehicles/show', methods=['GET'])
-def get_all_vehicles():
-	all_vehicles = Vehicles.query.all()
-	result = vehicles_schema.dump(all_vehicles)
-	return jsonify(result)
-
-
-# ###### get a single VEHICLE from vehicles table
-@app.route('/vehicles/show/<id>', methods=['GET'])
-def get_vehicle(id):
-	vehicle = Vehicles.query.filter(Vehicles.id == id).all()
-	return vehicles_schema.jsonify(vehicle) # returns an array of objects
-
-# ###### get a single VEHICLE from vehicles table
-@app.route('/details3/vehicles/show/<id>', methods=['GET'])
-def get_vehicle2(id):
-	vehicle = Vehicles.query.filter(Vehicles.id == id).all()
-	return vehicles_schema.jsonify(vehicle) # returns an array of objects
+def sha256encode(arg):
+    sha256_pwd = sha256(bytes('info_mgr',encoding='utf-8'))
+    sha256_pwd.update(bytes(arg,encoding='utf-8'))
+    return sha256_pwd.hexdigest()
 
 
-# ######     Rentals
-# ################################################
+@app.route('/user/current', methods=['GET'])
+def getUserInfo():
+	print(request.headers)
+	token = request.headers['token']
+	if token in token_to_username:
+		student_id = token_to_username[token]
+	else:
+		return 404
+	student_info = Student.query.filter(Student.id == student_id)
+	result = user_info_schema.jsonify((student_info.username, student_info.major))
+	return result
 
-# ###### get all RENTALS for certain vehicle
-@app.route('/vehicles/rentals/<id>', methods=['GET'])
-def get_rentals_by_vehicle_id(id):
-
-	# list of rentals
-	rentals = db.session.query(Rentals.id, Rentals.date_start, Rentals.odometer_start, Rentals.odometer_end, (Rentals.odometer_end - Rentals.odometer_start).label('distance'), Rentals.date_end, Rentals.rental_type, func.IF(Rentals.rental_type == "D", (func.datediff(Rentals.date_end, Rentals.date_start)+1)*100, (Rentals.odometer_end - Rentals.odometer_start)).label('rental_cost')).filter(Rentals.vehicle_id == id).order_by(desc(Rentals.date_start)).all()
-	#print(rentals)
-	rentals_list = rentals_schema_more.jsonify(rentals)
-	
-	return (rentals_list)
-
-# ###### get RENTALS summary for a vehicle
-@app.route('/vehicles/rentals/sum/<id>', methods=['GET'])
-def get_rentals_sum_by_vehicle_id(id):
-    # rentals summary
-	rentals_summary = db.session.query(Rentals.id, Rentals.vehicle_id, (Rentals.odometer_end - Rentals.odometer_start).label('distance'), Rentals.rental_type, func.IF(Rentals.rental_type == "D", (func.datediff(Rentals.date_end, Rentals.date_start)+1)*100, (Rentals.odometer_end - Rentals.odometer_start)).label('rental_cost')).filter(Rentals.vehicle_id == id).all()
-
-	rentals_count = 0
-	rentals_distance = 0
-	rentals_cost = 0
-
-	for rental in rentals_summary:
-		rentals_count += 1
-		rentals_distance += rental.distance
-		rentals_cost += rental.rental_cost
-	
-	#print(rentals_count)
-	#print(rentals_distance)
-	#print(rentals_cost)
-
-	rentals_summary = {"total_rentals": rentals_count, "total_distance": rentals_distance, "total_cost": rentals_cost}
-	
-	return (rentals_summary)
+@app.route('/courses/enrolled', methods=['GET'])
+def getSelectedCourse():
+	token = request.headers['token']
+	if token in token_to_username:
+		student_id = token_to_username[token]
+	else:
+		return 404
+	all_choose = Choose.query.filter(Choose.student_id == student_id).all()
+	all_course = db.session.query(Course.serial_no, Course.course_name, Teacher.username, Course.course_position, Course.course_time, Course.course_exam_time).filter(Course.id in all_choose.id).filter(Teacher.id == all_choose.teacher_id).all()
+	result = chosens_course_schema.jsonify(all_course)
+	return result
 
 
+@app.route('/courses/major', methods=['GET'])
+def getMajorCourse():
+	token = request.headers['token']
+	if token in token_to_username:
+		student_id = token_to_username[token]
+	else:
+		return 404
+	student_major = db.session.query(Student.major).filter(Student.id == student_id)
+	all_course = db.session.query(Course.serial_no, Course.course_name, Teacher.username, Course.course_position, Course.course_time, Course.course_exam_time).filter(Course.major == student_major).filter(Teacher.id == Course.teacher_id).all()
+	result = chosens_course_schema.jsonify(all_course)
+	return result
 
-# ######     Fuel Purchases
-# ################################################
+@app.route('/user/courses', methods=['GET'])
+def getAllCourse():
+	token = request.headers["z-token"]
+	user = verify_token(token)
+	if (type(user).__name__ == 'Student'):
+		all_choose = Choose.query.filter(Choose.student_id == student.id).all()
+		all_course = db.session.query(Course.serial_no, Course.course_name, Teacher.username, Course.course_position, Course.course_time, Course.course_exam_time, 1 if Course.id in all_choose.id else 0).filter(Teacher.id == Course.teacher_id).all()
+		result = chosens_state_schema.jsonify(all_course)
+	elif (type(user).__name__ == 'Teacher'):
+		all_choose = Choose.query.filter(Choose.teacher_id == teacher.id).all()
+		all_course = db.session.query(Choose.id, Course.serial_no, Course.course_name, Course.course_position, Course.course_time, Course.course_exam_time, Course.capacity, Course.used).filter(Course.id in all_choose.id).all()
+		result = students_chosen_schema.jsonify(all_course)
+	return result
 
-# ###### get all FUEL_PURCHASES for certain vehicle
-@app.route('/vehicles/fuel_purchases/<id>', methods=['GET'])
-def get_fuel_purchases_by_vehicle_id(id):
-
-	fuel_purchases = Fuel_purchases.query.filter(Fuel_purchases.vehicle_id == id).order_by(desc(Fuel_purchases.created)).all()
-	fuel_purchases_list = fuel_purchases_schema.jsonify(fuel_purchases)
-	return fuel_purchases_list
-	
-
-# ###### get FUEL_PURCHASES summary for a vehicle
-@app.route('/vehicles/fuel_purchases/sum/<id>', methods=['GET'])
-def get_fuel_purchases_sum_by_vehicle_id(id):
-
-	fuel_purchases = Fuel_purchases.query.filter(Fuel_purchases.vehicle_id == id).all()
-	
-	fuel_purchases_count = 0
-	fuel_purchases_amount = 0
-	fuel_purchases_cost = 0
-	
-	for fuel_purchase in fuel_purchases:
-		fuel_purchases_count += 1
-		fuel_purchases_amount += fuel_purchase.amount
-		fuel_purchases_cost += fuel_purchase.cost
-		
-	fuel_purchases_summary = {"total_fuel_purchases": fuel_purchases_count, "total_amount": fuel_purchases_amount, "total_cost": fuel_purchases_cost}
-	
-	return fuel_purchases_summary
-
-
-
-
-# ######     Services
-# ################################################
-
-# ###### get all SERVICES for certain vehicle
-@app.route('/vehicles/services/<id>', methods=['GET'])
-def get_services_by_vehicle_id(id):
-	services = Services.query.filter(Services.vehicle_id == id).order_by(desc(Services.serviced_at)).all()
-	services_list = services_schema.jsonify(services)
-	return (services_list)
-
-# ###### get all SERVICES for certain vehicle
-@app.route('/details3/vehicles/services/<id>', methods=['GET'])
-def get_services_by_vehicle_id2(id):
-	services = Services.query.filter(Services.vehicle_id == id).order_by(desc(Services.serviced_at)).all()
-	services_list = services_schema_more.jsonify(services)
-	return (services_list)
-
-
-# ###### get SERVICES summary for a vehicle
-@app.route('/vehicles/services/sum/<id>', methods=['GET'])
-def get_services_sum_by_vehicle_id(id):
-	services = Services.query.filter(Services.vehicle_id == id).all()
-	
-	services_count = 0
-	
-	for service in services:
-		services_count += 1
-		
-	#print(services_count)
-	
-	services_summary = {"total_services": services_count}
-	
-	return services_summary
+@app.route('/courses/:cid/list', methods=['GET'])
+def getStudentTeacherListGet():
+	token = request.headers['token']
+	if token in token_to_username:
+		teacher_id = token_to_username[token]
+	else:
+		return 404
+	all_choose = Choose.query.filter(Choose.teacher_id == teacher_id).filter(cid == Choose.id).all() 
+	all_student = db.session.query(Student.id, Student.username, Student.sex, Student.major, Student.phone).filter(Student.id in all_choose.student_id).all()
+	result = students_teacher_schema.jsonify(all_student)
+	return result
 
 
 
 # ################################################
 # ######             POST Methods
 # ###############################################
-	
-	
-# ################################################
-# ## 1 ## add a vehicle to the database
-# ################################################ 	
 
+@app.route('/login', methods=['POST'])
+def userLogin(id, password):
+	student_id_list = Student.query.all()[0].id
+	teacher_id_list = Teacher.query.all()[0].id
+	admin_id_list = Admin.query.all()[0].id
+	data = request.get_json()
+	if (id in student_id_list):
+		role = 0
+	elif (id in teacher_id_list):
+		role = 1
+	elif (id in admin_id_list):
+		role = 2
+	else:
+		role = -1
+		result = login_fail_schema.jsonify((False, "Invalid username or password"))
+	if (role == 0):
+		correct_password = Student.query.filter(Student.id == id)
+		if (correct_password == password):
+			token = sha256encode(data['id'])
+			username_to_token[data['id']] = token
+			token_to_username[token] = data['id']
+			result = login_success_schema.jsonify((True, "Login Success", token, 0))
+		else:
+			result = login_fail_schema.jsonify((False, "Invalid username or password"))
+	if (role == 1):
+		correct_password = Teacher.query.filter(Teacher.id == id)
+		if (correct_password == password):
+			token = sha256encode(data['id'])
+			username_to_token[data['id']] = token
+			token_to_username[token] = data['id']
+			result = login_success_schema.jsonify((True, "Login Success", token, 1))
+		else:
+			result = login_fail_schema.jsonify((False, "Invalid username or password"))
+	if (role == 2):
+		correct_password = Admin.query.filter(Admin.id == id)
+		if (correct_password == password):
+			token = sha256encode(data['id'])
+			username_to_token[data['id']] = token
+			token_to_username[token] = data['id']
+			result = login_success_schema.jsonify((True, "Login Success", token, 2))
+		else:
+			result = login_fail_schema.jsonify((False, "Invalid username or password"))
+	return result
 
-@app.route('/vehicles/add', methods=['POST'])
-def add_vehicle():
+@app.route('/logout', methods=['POST'])
+def userLogout():
+	token = request.headers['token']
+	if token in token_to_username:
+		username = token_to_username[token]
+		del token_to_username[token]
+		del username_to_token[username]
+	else:
+		return 404
+	result = logout_schema.jsonify((True, "Logout Success"))
+	return result
 
-# get data from request
-	make = request.json['make']
-	model = request.json['model']
-	release_year = request.json['release_year']
-	registration = request.json['registration']
-	try:
-		fuel = request.json['fuel']
-		if fuel == "":
-			fuel = None
-	except:
-		fuel = None
-	try:
-		tank_size = request.json['tank_size']
-		if tank_size == "":
-			tank_size = None
-	except:
-		tank_size = None
-	try:
-		initials = request.json['initials']
-	except:
-		initials = None
-	
-# instantiate the vehicle object
-	new_vehicle = Vehicles(make, model, release_year, registration, fuel, tank_size, initials)
-	
-# add vehicle to database
-	db.session.add(new_vehicle)
+@app.route('/user/scheme', methods=['POST'])
+def cultivatePlan():
+	token = request.headers['token']
+	if token in token_to_username:
+		student_id = token_to_username[token]
+	else:
+		return 404
+	choose_list = request.json['classes']
+	for choose in choose_list:
+		# don't know whether can write like this
+		course = Course.query.get(Course.serial_no == choose)
+		choose_id = course.id
+		choose_student = student_id
+		choose_teacher = course.teacher_id
+		new_choose = CultivationPlan(choose_id, choose_student, choose_teacher)
+		db.session.merge(new_choose)
+
 	db.session.commit()
-	
-# return message
-	return vehicle_schema.jsonify(new_vehicle)
 
-	
-	
+	result = update_cultivation_plan_schema.jsonify((True, "Update training scheme success"))
+	return result
 
-	
-# ################################################
-# ## 2 ## add a rental to avehicle into the database
-# ################################################ 	
+@app.route('/user/courses', methods=['POST'])
+def addCourse():
+	token = request.headers['token']
+	if token in token_to_username:
+		student_id = token_to_username[token]
+	else:
+		return 404
+	courses_list = request.json['courses']
+	for course_serial_no in courses_list:
+		course = Course.query.get(Course.serial_no == course_serial_no)
 
-@app.route('/vehicles/rentals/add', methods=['POST'])
-def add_vehicle_rental():
-# get datga from request
-	vehicle_id = request.get_json()['vehicle_id']
-	odometer_start = request.get_json()['odometer_start']
-	odometer_end = request.get_json()['odometer_end']
-	date_start = request.get_json()['date_start']
-	date_end = request.get_json()['date_end']
-	rental_type = request.get_json()['rental_type']
+		# Unknown whether it's correct
+		course.used += 1
 
-# instantiate the vehicle object
-	
-	
-	# ToDo:
-	# Validate that data is correct;
-	# Return error message
-	
-	new_rental = Rentals(vehicle_id, odometer_start, odometer_end, date_start, date_end, rental_type)
-	
+		choose_id = course.id
+		choose_student = student_id
+		choose_teacher = course.teacher_id
+		new_choose = Choose(choose_id, choose_student, choose_teacher)
+		db.session.merge(new_choose)
 
-	
-	db.session.add(new_rental)
 	db.session.commit()
-	
-	# ToDo:
-	# Return success message
-	
-	return rental_schema.jsonify(new_rental)
-	
-	
-	
-# ################################################
-# ## 3 ## add a service to a vehicle
-# ################################################ 	
 
-@app.route('/vehicles/services/add', methods=['POST'])
-def add_service():
-# get data from request
-	vehicle_id = request.get_json()['vehicle_id']
-	odometer = request.get_json()['odometer']
-	serviced_at = request.get_json()['serviced_at']
+	return 204
 
-	
-# instantiate the vehicle object
-	new_service = Services(vehicle_id, odometer, serviced_at)
-	
-	db.session.add(new_service)
+@app.route('/courses/:cid/list', methods=['POST'])
+def getStudentTeacherListPost():
+	token = request.headers['token']
+	if token in token_to_username:
+		admin_id = token_to_username[token]
+	else:
+		return 404
+	student_list = request.json['id']
+	for student_id in student_list:
+		course = Course.query.get(Course.id == cid)
+
+		# Unknown whether it's correct
+		course.used += 1
+
+		choose_id = cid
+		choose_student = student_id
+		choose_teacher = course.teacher_id
+		new_choose = Choose(choose_id, choose_student, choose_teacher)
+		db.session.merge(new_choose)
+
 	db.session.commit()
-	
-	return service_schema.jsonify(new_service)
-	
-	
-# ################################################
-# ## 4 ## add a fuel purchase to a vehicle
-# ################################################ 
-	
-@app.route('/vehicles/fuel_purchase/add', methods=['POST'])
-def add_fuel_purchase():
-# get data from request
 
-	vehicle_id = request.get_json()['vehicle_id']
-	rental_id = request.get_json()['rental_id']
-	amount = request.get_json()['amount']
-	cost = request.get_json()['cost']
-	
-# instantiate the vehicle object
-	new_fuel_purchase = Fuel_purchases(vehicle_id, rental_id, amount, cost)
-	
-	db.session.add(new_fuel_purchase)
-	db.session.commit()
-	
-	return fuel_purchase_schema.jsonify(new_fuel_purchase)
-	
+	return 200
+
+# @app.route('/user/program', methods=['POST'])
+# def CultivatePlan():
+#     token = request.headers["z-token"]
+#     student = verify_token(token)
+#     choose_list = request.json['classes']
+#     for choose in choose_list:
+#         course = Course.query.get(Course.serial_no = choose)
+#         choose_id = course.id
+#         choose_student = student.id
+#         choose_teacher = course.teacher_id
+#         new_choose = CultivationPlan(choose_id, choose_student, choose_teacher)
+#         db.session.merge(new_choose)
+    
+#     db.session.commit()
+
+#     return 200
+
+# @app.route('/user/courses/<serial_no>', methods=['POST'])
+# def CultivatePlan():
+#     token = request.headers["z-token"]
+#     student = verify_token(token)
+#     course = Course.query.get(serial_no)
+#     course_id = course.id
+#     course_student = student.id
+#     course_teacher = course.teacher_id
+#     new_course = Choose(course_id, student_id, course_teacher)
+#     db.session.add(new_course)
+    
+#     db.session.commit()
+
+#     return 200
 	
 # ################################################
 # ######             PUT Methods
 # ###############################################
-	
-	
-# ################################################
-# ######   Edit vehicle
-# ################################################ 	
 
-@app.route('/vehicles/edit/<id>', methods=['PUT'])
-def edit_vehicle(id):
-	vehicle = Vehicles.query.get(id)
 
-	make = request.get_json()['make']
-	model = request.get_json()['model']
-	release_year = request.get_json()['release_year']
-	registration = request.get_json()['registration']
-	fuel = request.get_json()['fuel']
-	tank_size = request.get_json()['tank_size']
-	initials = request.get_json()['initials']
-	
-	vehicle.make = make
-	vehicle.model = model
-	vehicle.release_year = release_year
-	vehicle.registration = registration
-	vehicle.fuel = fuel
-	vehicle.tank_size = tank_size
-	vehicle.initials = initials
-	
-	db.session.commit()
-	return vehicle_schema.jsonify(vehicle)
-	
-	
-	
 # ################################################
 # ######             DELETE Methods
 # ###############################################
 	
-	
-# ################################################
-# ######   Delete vehicle
-# ################################################ 
-	
-@app.route('/vehicles/delete/<id>', methods=['DELETE'])
-def delete_vehicle(id):
-	vehicle = Vehicles.query.get(id)
-	db.session.delete(vehicle)
-	db.session.commit()
-	
-	return vehicle_schema.jsonify(vehicle)
+@app.route('/user/courses', methods=['DELETE'])
+def deleteCourse():
+	token = request.headers['token']
+	if token in token_to_username:
+		student_id = token_to_username[token]
+	else:
+		return 404
+	courses_list = request.json['courses']
+	for course_serial_no in courses_list:
+		course = Course.query.get(Course.serial_no == course_serial_no)
+		
+		# Unknown whether it's correct
+		course.used -= 1
 
+		delete_course = Choose.query.get(Choose.id == course.id)
+		db.session.delete(delete_course)
+	db.session.commit()
+	return 204
+
+@app.route('/courses/:cid/list', methods=['DELETE'])
+def deleteCourseList():
+	token = request.headers['token']
+	if token in token_to_username:
+		amin_id = token_to_username[token]
+	else:
+		return 404
+	student_list = request.json['id']
+	for student_id in student_list:
+		course = Course.query.get(Course.id == cid)
+		
+		# Unknown whether it's correct
+		course.used -= 1
+
+		delete_course = Choose.query.get(Choose.id == course.id and Choose.student_id == student_id)
+		db.session.delete(delete_choose)
+	db.session.commit()
+	return 200
 
 # Run server
 if __name__ == '__main__':
-    app.run(debug=True)
-    #app.run(host='192.168.1.105', debug=True)
+	app.run(debug=True)
+	#app.run(host='192.168.1.105', debug=True)
