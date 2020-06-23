@@ -18,59 +18,7 @@ from sqlalchemy import table, column, func, desc
 
 import os
 
-# Usefull links:
-# https://blog.miguelgrinberg.com/post/nested-queries-with-sqlalchemy-orm
-# https://auth0.com/blog/sqlalchemy-orm-tutorial-for-python-developers/
-# https://docs.sqlalchemy.org/en/13/core/sqlelement.html#sqlalchemy.sql.expression.func
 
-# def create_token(api_user, api_role):
-# 	'''
-# 	生成token
-# 	:param api_user:用户id
-# 	:return: token
-# 	''' 
-# 	s = Serializer(current_app.config["SECRET_KEY"],expires_in=3600)
-# 	tmp_dict = {"id":api_user, "role":api_role}
-# 	tmp_byte = bytes('{}'.format(tmp_dict),'utf-8')
-# 	token = s.dumps(copy.deepcopy(tmp_byte)).decode()
-# 	return token
-
-# def verify_token(token):
-# 	'''
-# 	校验token
-# 	:param token: 
-# 	:return: 用户信息 or None
-# 	'''
-# 	s = Serializer(current_app.config["SECRET_KEY"])
-# 	try:
-# 		data = s.loads(token)
-# 	except Exception:
-# 		return None
-# 	if (data["role"] == 0):
-# 		result = Student.query.get(data["id"])
-# 	elif (data["role"] == 1):
-# 		result = Teacher.query.get(data["id"])
-# 	elif (data["role"] == 2):
-# 		result = Admin.query.get(data["id"])
-# 	return result
-
-# def login_required(view_func):
-# 	@functools.wraps(view_func)
-# 	def verify_token(*args,**kwargs):
-# 		try:
-# 			token = request.headers["z-token"]
-# 		except Exception:
-# 			return jsonify(code = 4103,msg = '缺少参数token')
-		
-# 		s = Serializer(current_app.config["SECRET_KEY"])
-# 		try:
-# 			s.loads(token)
-# 		except Exception:
-# 			return jsonify(code = 500,msg = "登录已过期")
-
-# 		return view_func(*args,**kwargs)
-
-# 	return verify_token
 
 
 username_to_token = {}
@@ -164,7 +112,7 @@ class Admin(db.Model):
 
 class CultivationPlan(db.Model):
 	id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('course.id', ondelete='CASCADE'), nullable=False,  primary_key=True)
-	student_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('student.id', ondelete='CASCADE'))
+	student_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('student.id', ondelete='CASCADE'), primary_key=True)
 	teacher_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('teacher.id', ondelete='CASCADE'))
 
 	# Constructor
@@ -175,7 +123,7 @@ class CultivationPlan(db.Model):
 
 class Choose(db.Model):
 	id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('course.id', ondelete='CASCADE'), nullable=False,  primary_key=True)
-	student_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('student.id', ondelete='CASCADE'))
+	student_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('student.id', ondelete='CASCADE'), primary_key=True)
 	teacher_id = db.Column(BIGINT(20, unsigned=True), db.ForeignKey('teacher.id', ondelete='CASCADE'))
 
 	# Constructor
@@ -236,7 +184,7 @@ class Course(db.Model):
 class CourseSchema(ma.Schema):
 	class Meta:
 		orderd = True
-		fields = ('id', 'serial_no', 'course_name', 'teacher_id', 'used', 'capacity', 'course_time', 'course_length', 'course_exam_time', 'course_position', 'major', 'credit')
+		fields = ('id', 'serial_no', 'course_name', 'teacher_id', 'used', 'capacity', 'course_time', 'course_length', 'course_exam_time', 'course_position', 'major', 'credit', 'chosen_true', 'chosen_false')
 
 class StudentSchema(ma.Schema):
 	class Meta:
@@ -387,6 +335,8 @@ token_to_username[token] = '666666'
 token = sha256encode('99999')
 username_to_token['99999'] = token
 token_to_username[token] = '99999'
+
+
 # db.create_all()
 # db.session.add(Student('3170105470', 'zys', '123456', 'cs', '1', '18888922411'))
 # db.session.add(Student('3000000000', 'wzh', '123456', 'cs', '1', '111111'))
@@ -518,10 +468,14 @@ def getStudentTeacherListGet(cid):
 # ###############################################
 
 @app.route('/login', methods=['POST'])
-def userLogin(id, password):
-	student_id_list = Student.query.all()[0].id
-	teacher_id_list = Teacher.query.all()[0].id
-	admin_id_list = Admin.query.all()[0].id
+def userLogin():
+	student_id_list = []
+	teacher_id_list = []
+	admin_id_list = []
+	student_list = Student.query.all()
+	teacher_list = Teacher.query.all()
+	admin_list = Admin.query.all()
+
 	data = request.get_json()
 	if (id in student_id_list):
 		role = 0
@@ -580,19 +534,21 @@ def cultivatePlan():
 		student_id = token_to_username[token]
 	else:
 		return str(404)
-	choose_list = request.json['classes']
+	data = request.get_json("classes")
+	# choose_list = request.form.get('classes')
+	choose_list = data['classes']
 	for choose in choose_list:
 		# don't know whether can write like this
-		course = Course.query.get(Course.serial_no == choose)
-		choose_id = course.id
+		course = db.session.query(Course.id, Course.teacher_id).filter(Course.serial_no == choose).all()
+		choose_id = course[0].id
 		choose_student = student_id
-		choose_teacher = course.teacher_id
+		choose_teacher = course[0].teacher_id
 		new_choose = CultivationPlan(choose_id, choose_student, choose_teacher)
 		db.session.merge(new_choose)
 
 	db.session.commit()
 
-	result = update_cultivation_plan_schema.jsonify((True, "Update training scheme success"))
+	result = {'success': 'True', 'message': 'Update training scheme success'}
 	return result
 
 @app.route('/user/courses', methods=['POST'])
@@ -602,40 +558,15 @@ def addCourse():
 		student_id = token_to_username[token]
 	else:
 		return str(404)
-	courses_list = request.json['courses']
-	for course_serial_no in courses_list:
-		course = Course.query.get(Course.serial_no == course_serial_no)
-
-		# Unknown whether it's correct
-		course.used += 1
-
-		choose_id = course.id
+	data = request.get_json("courses")
+	choose_list = data['courses']
+	for choose_course in choose_list:
+		course = db.session.query(Course.id, Course.teacher_id, Course.used).filter(Course.serial_no == choose_course).all()
+		tmp = Course.query.get(course[0].id)
+		tmp.used += 1
+		choose_id = course[0].id
 		choose_student = student_id
-		choose_teacher = course.teacher_id
-		new_choose = Choose(choose_id, choose_student, choose_teacher)
-		db.session.merge(new_choose)
-
-	db.session.commit()
-
-	return str(204)
-
-@app.route('/courses/:cid/list', methods=['POST'])
-def getStudentTeacherListPost():
-	token = request.headers['token']
-	if token in token_to_username:
-		admin_id = token_to_username[token]
-	else:
-		return str(404)
-	student_list = request.json['id']
-	for student_id in student_list:
-		course = Course.query.get(Course.id == cid)
-
-		# Unknown whether it's correct
-		course.used += 1
-
-		choose_id = cid
-		choose_student = student_id
-		choose_teacher = course.teacher_id
+		choose_teacher = course[0].teacher_id
 		new_choose = Choose(choose_id, choose_student, choose_teacher)
 		db.session.merge(new_choose)
 
@@ -643,37 +574,30 @@ def getStudentTeacherListPost():
 
 	return str(200)
 
-# @app.route('/user/program', methods=['POST'])
-# def CultivatePlan():
-#     token = request.headers["z-token"]
-#     student = verify_token(token)
-#     choose_list = request.json['classes']
-#     for choose in choose_list:
-#         course = Course.query.get(Course.serial_no = choose)
-#         choose_id = course.id
-#         choose_student = student.id
-#         choose_teacher = course.teacher_id
-#         new_choose = CultivationPlan(choose_id, choose_student, choose_teacher)
-#         db.session.merge(new_choose)
-    
-#     db.session.commit()
+@app.route('/courses/<cid>/list', methods=['POST'])
+def getStudentTeacherListPost(cid):
+	token = request.headers['token']
+	if token in token_to_username:
+		admin_id = token_to_username[token]
+	else:
+		return str(404)
+	data = request.get_json("id")
+	student_id = data['id']
+	course = db.session.query(Course.id, Course.serial_no, Course.teacher_id).filter(Course.serial_no == cid).all()
 
-#     return 200
+	tmp = Course.query.get(course[0].id)
+	tmp.used += 1
 
-# @app.route('/user/courses/<serial_no>', methods=['POST'])
-# def CultivatePlan():
-#     token = request.headers["z-token"]
-#     student = verify_token(token)
-#     course = Course.query.get(serial_no)
-#     course_id = course.id
-#     course_student = student.id
-#     course_teacher = course.teacher_id
-#     new_course = Choose(course_id, student_id, course_teacher)
-#     db.session.add(new_course)
-    
-#     db.session.commit()
+	choose_id = cid
+	choose_student = student_id
+	choose_teacher = course[0].teacher_id
+	new_choose = Choose(choose_id, choose_student, choose_teacher)
+	db.session.merge(new_choose)
 
-#     return 200
+	db.session.commit()
+
+	return str(200)
+
 	
 # ################################################
 # ######             PUT Methods
@@ -691,34 +615,35 @@ def deleteCourse():
 		student_id = token_to_username[token]
 	else:
 		return str(404)
-	courses_list = request.json['courses']
+	data = request.get_json("courses")
+	courses_list = data['courses']
 	for course_serial_no in courses_list:
-		course = Course.query.get(Course.serial_no == course_serial_no)
+		tmp = db.session.query(Course.id).filter(Course.serial_no == course_serial_no).all()
 		
-		# Unknown whether it's correct
+		course = Course.query.get(tmp[0].id)
 		course.used -= 1
 
-		delete_course = Choose.query.get(Choose.id == course.id)
-		db.session.delete(delete_course)
+		delete_choose = Choose.query.get((course.id,student_id))
+		db.session.delete(delete_choose)
 	db.session.commit()
 	return str(204)
 
-@app.route('/courses/:cid/list', methods=['DELETE'])
-def deleteCourseList():
+@app.route('/courses/<cid>/list', methods=['DELETE'])
+def deleteCourseList(cid):
 	token = request.headers['token']
 	if token in token_to_username:
 		amin_id = token_to_username[token]
 	else:
 		return str(404)
-	student_list = request.json['id']
-	for student_id in student_list:
-		course = Course.query.get(Course.id == cid)
+	data = request.get_json("id")
+	student_id = data['id']
+	tmp = db.session.query(Course.id).filter(Course.serial_no == cid).all()
 		
-		# Unknown whether it's correct
-		course.used -= 1
+	course = Course.query.get(tmp[0].id)
+	course.used -= 1
 
-		delete_course = Choose.query.get(Choose.id == course.id and Choose.student_id == student_id)
-		db.session.delete(delete_choose)
+	delete_choose = Choose.query.get((course.id, student_id))
+	db.session.delete(delete_choose)
 	db.session.commit()
 	return str(200)
 
