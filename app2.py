@@ -368,19 +368,16 @@ token_to_username[token] = '99999'
 
 
 # db.create_all()
+
 # db.session.add(Student('3170105470', 'zys', '123456', 'cs', '1', '18888922411'))
 # db.session.add(Student('3000000000', 'wzh', '123456', 'cs', '1', '111111'))
 # db.session.commit()
-# # student = Student.query.filter(Student.id == '3170105470').all()
-# # create_token('3000000000'.encode(), 0)
 
 # db.session.add(Teacher('666666', 'teacher', '123456', 'math'))
 # db.session.commit()
-# # create_token('666666'.encode(), 1)
 
 # db.session.add(Admin('99999', 'admin', '123456', 'cs'))
 # db.session.commit()
-# # create_token('99999'.encode(), 2)
 
 # db.session.add(Course('1', '0001', 'se', '666666', '0', '70', '1:1,2', '2', '2020.6.25', 'yq', 'cs', '2', '1', '0'))
 # db.session.commit()
@@ -400,7 +397,14 @@ token_to_username[token] = '99999'
 # db.session.add(CultivationPlan('2', '3170105470', '666666'))
 # db.session.commit()
 
+# db.session.add(Schedule('1', 'cultivationplan', '2020-05-30', '2020-06-01'))
+# db.session.commit()
 
+# db.session.add(Schedule('2', 'choose', '2020-06-05', '2020-06-20'))
+# db.session.commit()
+
+# db.session.add(Schedule('3', 'delete', '2020-05-30', '2020-07-01'))
+# db.session.commit()
 
 
 
@@ -497,13 +501,8 @@ def getScheduleInfo():
 		admin_id = token_to_username[token]
 	else:
 		return str(404)
-	data = request.get_json("schedules")
-	id_list = data['id']
-	all_schedule = []
-	for schedule_id in id_list:
-		schedule = db.session.query(Schedule.id, Schedule.operation_type, Schedule.start_time, Schedule.end_time).filter(Schedule.id == schedule_id).all()
-		all_schedule.append(schedule[0])
-	result = schedules_schema.jsonify(all_schedule)
+	schedule = db.session.query(Schedule.id, Schedule.operation_type, Schedule.start_time, Schedule.end_time).all()
+	result = schedules_schema.jsonify(schedule)
 	return result
 
 
@@ -578,7 +577,7 @@ def cultivatePlan():
 		student_id = token_to_username[token]
 	else:
 		return str(404)
-	schedule_result = Schedule.query(Schedule.operation_type, Schedule.start_time, Schedule.end_time).filter(Schedule.operation_type == "培养方案制定").all()
+	schedule_result = db.session.query(Schedule.operation_type, Schedule.start_time, Schedule.end_time).filter(Schedule.operation_type == "cultivationplan").all()
 	start = schedule_result[0].start_time
 	end = schedule_result[0].end_time
 	if (not isTimeAvailable(start, end)):
@@ -607,7 +606,7 @@ def addCourse():
 		student_id = token_to_username[token]
 	else:
 		return str(404)
-	schedule_result = Schedule.query(Schedule.operation_type, Schedule.start_time, Schedule.end_time).filter(Schedule.operation_type == "选课").all()
+	schedule_result = db.session.query(Schedule.operation_type, Schedule.start_time, Schedule.end_time).filter(Schedule.operation_type == "choose").all()
 	start = schedule_result[0].start_time
 	end = schedule_result[0].end_time
 	if (not isTimeAvailable(start, end)):
@@ -660,16 +659,16 @@ def updateScheduleInfo():
 	else:
 		return str(404)
 	data = request.get_json("schedules")
-	id_list = data['id']
-	for schedule_id in id_list:
-		schedule = db.session.query(Schedule.id, Schedule.operation_type, Schedule.start_time, Schedule.end_time).filter(Schedule.id == schedule_id).all()
+	schedule_list = data['schedules']
+	for i in schedule_list:
+		schedule = db.session.query(Schedule.id, Schedule.operation_type, Schedule.start_time, Schedule.end_time).filter(Schedule.id == i['id']).all()
 		if (len(schedule) == 0):
-			new_schedule = Schedule(data['id'], data['operation_type'], data['start_time'], data['end_time'])
+			new_schedule = Schedule(i['id'], i['operation_type'], i['start_time'], i['end_time'])
 			db.session.merge(new_schedule)
 		else:
-			tmp = Schedule.query.get(schedule_id)
-			tmp.start_time = data['start_time']
-			tmp.end_time = data['end_time']
+			tmp = Schedule.query.get(i['id'])
+			tmp.start_time = i['start_time']
+			tmp.end_time = i['end_time']
 		
 	db.session.commit()
 	return str(200)
@@ -691,7 +690,7 @@ def deleteCourse():
 		student_id = token_to_username[token]
 	else:
 		return str(404)
-	schedule_result = Schedule.query(Schedule.operation_type, Schedule.start_time, Schedule.end_time).filter(Schedule.operation_type == "退课").all()
+	schedule_result = db.session.query(Schedule.operation_type, Schedule.start_time, Schedule.end_time).filter(Schedule.operation_type == "delete").all()
 	start = schedule_result[0].start_time
 	end = schedule_result[0].end_time
 	if (not isTimeAvailable(start, end)):
@@ -704,10 +703,10 @@ def deleteCourse():
 		course = Course.query.get(tmp[0].id)
 		course.used -= 1
 
-		delete_choose = Choose.query.get((course.id,student_id))
+		delete_choose = Choose.query.get((course.id, student_id))
 		db.session.delete(delete_choose)
 	db.session.commit()
-	return str(204)
+	return str(200)
 
 @app.route('/courses/<cid>/list', methods=['DELETE'])
 def deleteCourseList(cid):
@@ -736,7 +735,7 @@ def deleteSchedule():
 	else:
 		return str(404)
 	data = request.get_json("ids")
-	id_list = data['id']
+	id_list = data['ids']
 	for schedule_id in id_list:
 		delete_schedule = Schedule.query.get(schedule_id)
 		db.session.delete(delete_schedule)
