@@ -353,23 +353,23 @@ def sha256encode(arg):
 # ######
 # ################################################
 
-token = sha256encode('3170105470')
-username_to_token['3170105470'] = token
-token_to_username[token] = '3170105470'
-token = sha256encode('3000000000')
-username_to_token['3000000000'] = token
-token_to_username[token] = '3000000000'
-token = sha256encode('666666')
-username_to_token['666666'] = token
-token_to_username[token] = '666666'
-token = sha256encode('99999')
-username_to_token['99999'] = token
-token_to_username[token] = '99999'
+# token = sha256encode('3170105470')
+# username_to_token['3170105470'] = token
+# token_to_username[token] = '3170105470'
+# token = sha256encode('3000000000')
+# username_to_token['3000000000'] = token
+# token_to_username[token] = '3000000000'
+# token = sha256encode('666666')
+# username_to_token['666666'] = token
+# token_to_username[token] = '666666'
+# token = sha256encode('99999')
+# username_to_token['99999'] = token
+# token_to_username[token] = '99999'
 
 
 # db.create_all()
 
-# db.session.add(Student('3170105470', 'zys', '123456', 'cs', '1', '18888922411'))
+# db.session.add(Student('3170105470', 'zys', '3212f87722c102feeda3cfd4357063d970f79fc98475e5852e127d1a95854407', 'cs', '1', '18888922411'))
 # db.session.add(Student('3000000000', 'wzh', '123456', 'cs', '1', '111111'))
 # db.session.commit()
 
@@ -512,51 +512,85 @@ def getScheduleInfo():
 
 @app.route('/login', methods=['POST'])
 def userLogin():
-	student_id_list = []
-	teacher_id_list = []
-	admin_id_list = []
-	student_list = Student.query.all()
-	teacher_list = Teacher.query.all()
-	admin_list = Admin.query.all()
-
-	data = request.get_json()
-	if (id in student_id_list):
-		role = 0
-	elif (id in teacher_id_list):
-		role = 1
-	elif (id in admin_id_list):
-		role = 2
+	data = request.get_json('username')
+	username = data['username']
+	password = data['password']
+		
+	if (Student.query.filter(Student.username == username).all()) != []:
+		student = Student.query.filter(Student.username == username).all()
+		if sha256encode(password) != student[0].password:
+			return str(403)
+		token = sha256encode(str(student[0].id))
+		username_to_token[username] = token
+		token_to_username[token] = username
+		result = {"success": "True", "message": "Login Success", "token": token, "data": {"id": student[0].id, "username": student[0].username, "role": 0, "major": student[0].major, "photo": "/images/avatars/avatar_1.png"}}
+		return result
+	elif (Teacher.query.filter(Teacher.username == username).all()) != []:
+		teacher = Teacher.query.filter(Teacher.username == username).all()
+		if sha256encode(password) != teacher[0].password:
+			return str(403)
+		token = sha256encode(str(teacher[0].id))
+		username_to_token[username] = token
+		token_to_username[token] = username
+		result = {"success": "True", "message": "Login Success", "token": token, "data": {"id": teacher[0].id, "username": teacher[0].username, "role": 0, "major": teacher[0].major, "photo": "/images/avatars/avatar_1.png"}}
+		return result
+	elif (Admin.query.filter(Admin.username == username).all()) != []:
+		admin = Admin.query.filter(Admin.username == username).all()
+		if sha256encode(password) != admin[0].password:
+			return str(403)
+		token = sha256encode(str(admin[0].id))
+		username_to_token[username] = token
+		token_to_username[token] = username
+		result = {"success": "True", "message": "Login Success", "token": token, "data": {"id": admin[0].id, "username": admin[0].username, "role": 0, "major": admin[0].major, "photo": "/images/avatars/avatar_1.png"}}
+		return result
 	else:
-		role = -1
-		result = login_fail_schema.jsonify((False, "Invalid username or password"))
-	if (role == 0):
-		correct_password = Student.query.filter(Student.id == id)
-		if (correct_password == password):
-			token = sha256encode(data['id'])
-			username_to_token[data['id']] = token
-			token_to_username[token] = data['id']
-			result = login_success_schema.jsonify((True, "Login Success", token, 0))
-		else:
-			result = login_fail_schema.jsonify((False, "Invalid username or password"))
-	if (role == 1):
-		correct_password = Teacher.query.filter(Teacher.id == id)
-		if (correct_password == password):
-			token = sha256encode(data['id'])
-			username_to_token[data['id']] = token
-			token_to_username[token] = data['id']
-			result = login_success_schema.jsonify((True, "Login Success", token, 1))
-		else:
-			result = login_fail_schema.jsonify((False, "Invalid username or password"))
-	if (role == 2):
-		correct_password = Admin.query.filter(Admin.id == id)
-		if (correct_password == password):
-			token = sha256encode(data['id'])
-			username_to_token[data['id']] = token
-			token_to_username[token] = data['id']
-			result = login_success_schema.jsonify((True, "Login Success", token, 2))
-		else:
-			result = login_fail_schema.jsonify((False, "Invalid username or password"))
-	return result
+		return str(403)
+	
+	# student_id_list = []
+	# teacher_id_list = []
+	# admin_id_list = []
+	# student_list = Student.query.all()
+	# teacher_list = Teacher.query.all()
+	# admin_list = Admin.query.all()
+
+	# data = request.get_json()
+	# if (id in student_id_list):
+	# 	role = 0
+	# elif (id in teacher_id_list):
+	# 	role = 1
+	# elif (id in admin_id_list):
+	# 	role = 2
+	# else:
+	# 	role = -1
+	# 	result = login_fail_schema.jsonify((False, "Invalid username or password"))
+	# if (role == 0):
+	# 	correct_password = Student.query.filter(Student.id == id)
+	# 	if (correct_password == password):
+	# 		token = sha256encode(data['id'])
+	# 		username_to_token[data['id']] = token
+	# 		token_to_username[token] = data['id']
+	# 		result = login_success_schema.jsonify((True, "Login Success", token, 0))
+	# 	else:
+	# 		result = login_fail_schema.jsonify((False, "Invalid username or password"))
+	# if (role == 1):
+	# 	correct_password = Teacher.query.filter(Teacher.id == id)
+	# 	if (correct_password == password):
+	# 		token = sha256encode(data['id'])
+	# 		username_to_token[data['id']] = token
+	# 		token_to_username[token] = data['id']
+	# 		result = login_success_schema.jsonify((True, "Login Success", token, 1))
+	# 	else:
+	# 		result = login_fail_schema.jsonify((False, "Invalid username or password"))
+	# if (role == 2):
+	# 	correct_password = Admin.query.filter(Admin.id == id)
+	# 	if (correct_password == password):
+	# 		token = sha256encode(data['id'])
+	# 		username_to_token[data['id']] = token
+	# 		token_to_username[token] = data['id']
+	# 		result = login_success_schema.jsonify((True, "Login Success", token, 2))
+	# 	else:
+	# 		result = login_fail_schema.jsonify((False, "Invalid username or password"))
+	# return result
 
 @app.route('/logout', methods=['POST'])
 def userLogout():
