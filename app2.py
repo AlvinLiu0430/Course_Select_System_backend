@@ -214,12 +214,12 @@ class ChooseSchema(ma.Schema):
 class ChosenCourseSchema(ma.Schema):
 	class Meta:
 		orderd = True
-		fields = ('serial_no', 'course_name', 'teacher_id', 'course_position', 'course_time', 'course_exam_time')
+		fields = ('code', 'name', 'teacher', 'position', 'class_time', 'exam_time')
     
 class ChosenStateSchema(ma.Schema):
 	class Meta:
 		orderd = True
-		fields = ('serial_no', 'course_name', 'teacher_id', 'course_position', 'course_time', 'course_exam_time', 'chosen')
+		fields = ('code', 'name', 'teacher', 'position', 'class_time', 'exam_time', 'chosen')
 
 class LoginSuccessSchema(ma.Schema):
 	class Meta:
@@ -249,7 +249,7 @@ class UpdateCultivationPlanSchema(ma.Schema):
 class StudentChosenSchema(ma.Schema):
 	class Meta:
 		orderd = True
-		fields = ('id', 'serial_no', 'course_name', 'course_position', 'course_time', 'course_exam_time', 'capacity', 'used')
+		fields = ('id', 'code', 'name', 'position', 'class_time', 'exam_time', 'cap', 'used')
 
 class StudentTeacherSchema(ma.Schema):
 	class Meta:
@@ -374,9 +374,6 @@ token_to_username[token] = '99999'
 
 
 
-
-
-
 @app.route('/user/current', methods=['GET'])
 def getUserInfo():
 	token = request.headers['token']
@@ -400,7 +397,8 @@ def getSelectedCourse():
 	# all_course = db.session.query(Course.serial_no, Course.course_name, Course.teacher_id, Course.course_position, Course.course_time, Course.course_exam_time).filter(lambda i: Course.id == i.id, all_choose).all()
 	all_course = []
 	for i in range(len(all_choose)):
-		course = db.session.query(Course.serial_no, Course.course_name, Course.teacher_id, Course.course_position, Course.course_time, Course.course_exam_time).filter(Course.id == all_choose[i].id).all()
+		course = db.session.query(Course.serial_no.label('code'), Course.course_name.label('name'), Course.teacher_id.label('teacher'), Course.course_position.label('position'), Course.course_time.label('class_time'), Course.course_exam_time.label('exam_time')).filter(Course.id == all_choose[i].id).all()
+		print(course)
 		all_course.append(course[0])
 	result = chosens_course_schema.jsonify(all_course)
 	return result
@@ -433,14 +431,15 @@ def getAllCourse():
 			all_choose_id.append(all_choose[i].id)
 		all_course = []
 		for i in range(len(all_plan)):
-			course = db.session.query(Course.serial_no, Course.course_name, Course.teacher_id, Course.course_position, Course.course_time, Course.course_exam_time, (Course.chosen_true if (Course.id in all_choose_id) else Course.chosen_false).label('chosen')).filter(Course.id == all_plan[i].id).all()
+			tmp = db.session.query(Course.id).filter(Course.id == all_plan[i].id).all()
+			course = db.session.query(Course.serial_no.label('code'), Course.course_name.label('name'), Course.teacher_id.label('teacher'), Course.course_position.label('position'), Course.course_time.label('class_time'), Course.course_exam_time.label('exam_time'), (Course.chosen_true if (tmp[0].id in all_choose_id) else Course.chosen_false).label('chosen')).filter(Course.id == all_plan[i].id).all()
 			all_course.append(course[0])
 		result = chosens_state_schema.jsonify(all_course)
 	elif (Teacher.query.filter(Teacher.id == user_id).all() != []):
 		all_choose = Choose.query.filter(Choose.teacher_id == user_id).all()
 		all_course = []
 		for i in range(len(all_choose)):
-			course = db.session.query(Course.id, Course.serial_no, Course.course_name, Course.course_position, Course.course_time, Course.course_exam_time, Course.capacity, Course.used).filter(Course.id == all_choose[i].id).all()
+			course = db.session.query(Course.id, Course.serial_no.label('code'), Course.course_name.label('name'), Course.course_position.label('position'), Course.course_time.label('class_time'), Course.course_exam_time.label('exam_time'), Course.capacity.label('cap'), Course.used).filter(Course.id == all_choose[i].id).all()
 			all_course.append(course[0])
 		result = students_chosen_schema.jsonify(all_course)
 	return result
