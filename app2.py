@@ -54,6 +54,15 @@ CORS(app)
 ma = Marshmallow(app)
 
 
+def isTimeAvailable(start, end):
+	start_time = datetime.datetime.strptime(start, "%Y-%m-%d")
+	end_time = datetime.datetime.strptime(end, "%Y-%m-%d")
+	current_time = datetime.datetime.now()
+	if (start_time <= current_time and current_time <= end_time):
+		return True
+	else:
+		return False
+
 # ################################################
 # ######
 # ######                MODELS
@@ -169,6 +178,19 @@ class Course(db.Model):
 		self.chosen_true = chosen_true
 		self.chosen_false = chosen_false
 
+
+class Schedule(db.Model):
+	id = db.Column(BIGINT(20, unsigned=True), nullable=False, primary_key=True)
+	operation_type = db.Column(VARCHAR(64), nullable=False)
+	start_time = db.Column(VARCHAR(64), nullable=False)
+	end_time = db.Column(VARCHAR(64), nullable=False)
+
+	def __init__(self, id, operation_type, start_time, end_time):
+		self.id = id
+		self.operation_type = operation_type
+		self.start_time = start_time
+		self.end_time = end_time
+
 # ################################################
 # ######
 # ######                SCHEMAS
@@ -256,6 +278,11 @@ class StudentTeacherSchema(ma.Schema):
 		orderd = True
 		fields = ('id', 'username', 'sex', 'major', 'phone')
 
+class ScheduleSchema(ma.Schema):
+	class Meta:
+		orderd = True
+		fields = ('id', 'operation_type', 'start_time', 'end_time')
+
 # init schemas
 course_schema = CourseSchema()
 
@@ -291,6 +318,9 @@ update_cultivation_plan_schema = UpdateCultivationPlanSchema()
 
 student_teacher_schema = StudentTeacherSchema()
 students_teacher_schema = StudentTeacherSchema(many=True)
+
+schedule_schema = ScheduleSchema()
+schedules_schema = ScheduleSchema(many=True)
 
 
 # ################################################
@@ -460,6 +490,21 @@ def getStudentTeacherListGet(cid):
 	result = students_teacher_schema.jsonify(all_student)
 	return result
 
+@app.route('/schedules', methods=['GET'])
+def getScheduleInfo():
+	token = request.headers['token']
+	if token in token_to_username:
+		admin_id = token_to_username[token]
+	else:
+		return str(404)
+	data = request.get_json("schedules")
+	id_list = data['id']
+	all_schedule = []
+	for schedule_id in id_list:
+		schedule = db.session.query(Schedule.id, Schedule.operation_type, Schedule.start_time, Schedule.end_time).filter(Schedule.id == schedule_id).all()
+		all_schedule.append(schedule[0])
+	result = schedules_schema.jsonify(all_schedule)
+	return result
 
 
 # ################################################
@@ -533,6 +578,11 @@ def cultivatePlan():
 		student_id = token_to_username[token]
 	else:
 		return str(404)
+	schedule_result = Schedule.query(Schedule.operation_type, Schedule.start_time, Schedule.end_time).filter(Schedule.operation_type == "培养方案制定").all()
+	start = schedule_result[0].start_time
+	end = schedule_result[0].end_time
+	if (not isTimeAvailable(start, end)):
+		return {'success': 'False', 'message': 'Not in the available set cultivation plan time!'}
 	data = request.get_json("classes")
 	# choose_list = request.form.get('classes')
 	choose_list = data['classes']
@@ -557,6 +607,11 @@ def addCourse():
 		student_id = token_to_username[token]
 	else:
 		return str(404)
+	schedule_result = Schedule.query(Schedule.operation_type, Schedule.start_time, Schedule.end_time).filter(Schedule.operation_type == "选课").all()
+	start = schedule_result[0].start_time
+	end = schedule_result[0].end_time
+	if (not isTimeAvailable(start, end)):
+		return str(204)
 	data = request.get_json("courses")
 	choose_list = data['courses']
 	for choose_course in choose_list:
@@ -597,6 +652,28 @@ def getStudentTeacherListPost(cid):
 
 	return str(200)
 
+@app.route('/schedules', methods=['POST'])
+def updateScheduleInfo():
+	token = request.headers['token']
+	if token in token_to_username:
+		admin_id = token_to_username[token]
+	else:
+		return str(404)
+	data = request.get_json("schedules")
+	id_list = data['id']
+	for schedule_id in id_list:
+		schedule = db.session.query(Schedule.id, Schedule.operation_type, Schedule.start_time, Schedule.end_time).filter(Schedule.id == schedule_id).all()
+		if (len(schedule) == 0):
+			new_schedule = Schedule(data['id'], data['operation_type'], data['start_time'], data['end_time'])
+			db.session.merge(new_schedule)
+		else:
+			tmp = Schedule.query.get(schedule_id)
+			tmp.start_time = data['start_time']
+			tmp.end_time = data['end_time']
+		
+	db.session.commit()
+	return str(200)
+
 	
 # ################################################
 # ######             PUT Methods
@@ -614,6 +691,11 @@ def deleteCourse():
 		student_id = token_to_username[token]
 	else:
 		return str(404)
+	schedule_result = Schedule.query(Schedule.operation_type, Schedule.start_time, Schedule.end_time).filter(Schedule.operation_type == "退课").all()
+	start = schedule_result[0].start_time
+	end = schedule_result[0].end_time
+	if (not isTimeAvailable(start, end)):
+		return str(204)
 	data = request.get_json("courses")
 	courses_list = data['courses']
 	for course_serial_no in courses_list:
@@ -643,6 +725,21 @@ def deleteCourseList(cid):
 
 	delete_choose = Choose.query.get((course.id, student_id))
 	db.session.delete(delete_choose)
+	db.session.commit()
+	return str(200)
+
+@app.route('/schedules', methods=['DELETE'])
+def deleteSchedule():
+	token = request.headers['token']
+	if token in token_to_username:
+		admin_id = token_to_username[token]
+	else:
+		return str(404)
+	data = request.get_json("ids")
+	id_list = data['id']
+	for schedule_id in id_list:
+		delete_schedule = Schedule.query.get(schedule_id)
+		db.session.delete(delete_schedule)
 	db.session.commit()
 	return str(200)
 
